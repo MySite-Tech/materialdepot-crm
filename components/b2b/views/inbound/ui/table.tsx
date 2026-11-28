@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { Fragment, ReactNode, useState } from 'react';
 
 import { callTally, inboundArrivalDay, inboundWorkDay, isOpenStatus, istDay, lastAttempt, requalifiedFrom } from '../../../models/inbound';
 import { InboundLead, fmtINR } from '../../../models/mock-data';
@@ -9,6 +9,7 @@ import { LENS, LIST_PAGE_SIZE, OUTCOME_LENSES, lensGroupOf } from '../constants'
 import { LeadCtx, Lens } from '../types';
 import { gapsFor } from '../utils';
 import { fmtFollowUp } from '../../../models/reminders';
+import { DealInline } from '../../../ui/deal-detail';
 
 const SINGLE_STATUS: Lens[] = ['new', 'closed', 'lost', 'invalid'];
 
@@ -59,7 +60,7 @@ function DealCell({ lead, ctx, onView }: { lead: InboundLead; ctx?: LeadCtx; onV
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onView(d.enqId); }}
-      title="Open the products and full detail"
+      title="Show the products and full detail under this lead"
       className="flex flex-col gap-0.5 min-w-0 text-left rounded-md -mx-1.5 px-1.5 py-1 hover:bg-indigo-50/60"
     >
       <span className="flex items-baseline gap-1.5">
@@ -82,7 +83,7 @@ function OpenTicketChip({ ctx, onView }: { ctx?: LeadCtx; onView: (enqId: string
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onView(d.enqId); }}
-      title={`${d.enqId} · ${d.status} · opened ${fmtDay(d.createdOn)}${d.branch ? ` · ${d.branch}` : ''}. Click for the products and full detail.`}
+      title={`${d.enqId} · ${d.status} · opened ${fmtDay(d.createdOn)}${d.branch ? ` · ${d.branch}` : ''}. Click to show the products and full detail under this lead.`}
       className={`mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-px text-[10.5px] font-medium ${d.kind === 'pi' ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
     >
       {d.kind === 'pi' ? 'PI' : 'Cart'} still open · {fmtINR(d.value)}{more > 0 ? ` · +${more}` : ''}
@@ -158,11 +159,10 @@ function Deal({ lead }: { lead: InboundLead }) {
   return <div className="flex flex-col gap-0.5 whitespace-nowrap">{value}{enq}</div>;
 }
 
-export function LeadTable({ lens, rows, ctx, onViewDeal, today, showOwner, searchQuery, searchWide, valueText, page, setPage, onOpen, onClearSearch, emptyAction, picked, onTogglePick, onTogglePage }: {
+export function LeadTable({ lens, rows, ctx, today, showOwner, searchQuery, searchWide, valueText, page, setPage, onOpen, onClearSearch, emptyAction, picked, onTogglePick, onTogglePage }: {
   lens: Lens;
   rows: InboundLead[];
   ctx: Map<string, LeadCtx>;
-  onViewDeal: (enqId: string) => void;
   today: string;
   showOwner: boolean;
   searchQuery: string;
@@ -178,6 +178,7 @@ export function LeadTable({ lens, rows, ctx, onViewDeal, today, showOwner, searc
   onTogglePage?: (ids: string[]) => void;
 }) {
   const meta = LENS[lens];
+  const [shownDeal, setShownDeal] = useState<{ lead: string; enqId: string } | null>(null);
   const pages = Math.max(1, Math.ceil(rows.length / LIST_PAGE_SIZE));
   const cur = Math.min(page, pages - 1);
   const visible = rows.slice(cur * LIST_PAGE_SIZE, (cur + 1) * LIST_PAGE_SIZE);
@@ -191,6 +192,7 @@ export function LeadTable({ lens, rows, ctx, onViewDeal, today, showOwner, searc
   const showCalls = group === 'calls' || group === 'side';
   const outcomeHead = lens === 'lost' ? 'Lost reason' : lens === 'invalid' ? 'Why invalid' : lens === 'sent' ? 'Handed over' : isResult ? 'Outcome' : 'Deal';
   const showOutcome = isResult || group === 'side';
+  const columns = 2 + [!!picked, showStatus, isDeals, isResult, isDeals, showFollowUp, showCalls, showOwner, showOutcome, showGaps].filter(Boolean).length + 1;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -255,8 +257,11 @@ export function LeadTable({ lens, rows, ctx, onViewDeal, today, showOwner, searc
             </thead>
             <tbody>
               {visible.map((l) => {
+                const onViewDeal = (enqId: string) => setShownDeal((s) => (s?.lead === l.id && s.enqId === enqId ? null : { lead: l.id, enqId }));
+                const deal = shownDeal?.lead === l.id ? shownDeal.enqId : '';
                 return (
-                  <tr key={l.id} onClick={() => onOpen(l.id)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
+                  <Fragment key={l.id}>
+                  <tr onClick={() => onOpen(l.id)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer">
                     {picked && (
                       <td className={td} onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" aria-label={`Select ${l.company}`} checked={picked.has(l.id)} onChange={() => onTogglePick?.(l.id)} />
@@ -296,6 +301,12 @@ export function LeadTable({ lens, rows, ctx, onViewDeal, today, showOwner, searc
                       </td>
                     )}
                   </tr>
+                  {deal && (
+                    <tr className="border-b border-gray-100">
+                      <td colSpan={columns} className="px-3 pb-3 pt-0"><DealInline enqId={deal} /></td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>

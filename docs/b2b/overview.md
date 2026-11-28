@@ -150,8 +150,8 @@ sheet), and the type decides the channel (`lib/b2b/revenue/utils/classify.ts`):
 - **Studio Sales and All B2B (2026-11-28).** Studio Sales is Direct + Studio EC
   Redirected + Referred, the B2B team's effort, and is what the target measures. All
   B2B revenue adds EC Direct, firms ordering at a store on their own. The hero shows
-  Studio Sales against the target with All B2B under it; the month-by-month labels are
-  Studio Sales with EC Direct faded on top; Revenue analysis opens scoped to Studio
+  Studio Sales against the target with All B2B under it; Month by month has a Studio
+  Sales / All B2B switch (below); Revenue analysis opens scoped to Studio
   Sales (a switch sets the Channel filter). One function each: `studioTotal`,
   `isStudioChannel`, `STUDIO_CHANNELS`.
 - **The user's four, in their words (2026-11-03):** Direct is placed on B2B.
@@ -505,7 +505,12 @@ three teams that do not share stages.
    a pace marker on the current month. Direct and Studio EC Redirected show their
    types as bars, and a bar filters the table to that type. Referred shows where
    its orders were booked. Under the cards, **Month by month** stacks the channels
-   for the last six months; a bar opens that month. Its two months at a time keep
+   for the last six months; a bar opens that month. **A Studio Sales / All B2B switch
+   picks what the bars measure (2026-11-28).** Each bar's height, label and stack are
+   the same figure: Studio Sales stacks its three channels, All B2B all four. Before,
+   the label was Studio Sales while the height was All B2B with EC Direct faded on
+   top, so a month with the larger label could draw the shorter bar (it had less EC
+   Direct). Don't put two measures on one bar again. Its two months at a time keep
    Django to 16 page reads in flight, and a month the hero is already building is
    shared, not built twice (`revenueReport`'s single-flight). EC Direct is cyan
    (`#0891B2`), which passed the palette validator against all three other

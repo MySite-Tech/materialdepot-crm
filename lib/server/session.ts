@@ -127,6 +127,8 @@ function toCaller(row: OrgRow, userId: string): Caller {
   };
 }
 
+const verifying = new Map<string, Promise<Caller>>();
+
 export async function requireCaller(request: Request): Promise<Caller> {
   const token = bearerToken(request);
   const userId = userIdFromToken(token);
@@ -136,6 +138,14 @@ export async function requireCaller(request: Request): Promise<Caller> {
   const cached = getCached(key) as Caller | null;
   if (cached) return cached;
 
+  const running = verifying.get(key);
+  if (running) return running;
+  const run = verifyCaller(token, userId, key).finally(() => verifying.delete(key));
+  verifying.set(key, run);
+  return run;
+}
+
+async function verifyCaller(token: string, userId: string, key: string): Promise<Caller> {
   const lastKey = `last-verified:${key}`;
   let roster: OrgRow[];
   try {

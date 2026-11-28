@@ -19,10 +19,9 @@ import { activeFilterCount, byNewestLeadFirst, countsTomorrow, leadCtx, lensMatc
 import { fetchInboundBoard, inboundBoardMatches, inboundPhones, saveInboundLead } from '@/lib/b2b';
 import { INBOUND_WINDOW_START } from '../../constants/inbound';
 import { leadDeals } from '@/lib/b2b/inbound-deals/utils';
-import { useInboundDeals } from '../../hooks/use-inbound-deals';
+import { useOpenDeals } from '../../hooks/use-open-deals';
 import { fmtDay } from '../../ui/inbound-chips';
 import { LeadCtx } from './types';
-import { DealDetail } from '../../ui/deal-detail';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInboundSync } from '../../hooks/use-inbound-sync';
@@ -50,7 +49,6 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const [move, setMove] = useState<{ lead: InboundLead; target: InboundStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [viewingDeal, setViewingDeal] = useState<string | null>(null);
 
   const today = istToday();
 
@@ -136,7 +134,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     () => [...new Set(inWindow.flatMap(inboundPhones))].sort().join(','),
     [inWindow],
   );
-  const deals = useInboundDeals(phoneKey, !loading && !loadFailed && !unlinked);
+  const deals = useOpenDeals(phoneKey, !loading && !loadFailed && !unlinked);
 
   const ctx = useMemo(() => {
     const out = new Map<string, LeadCtx>();
@@ -404,7 +402,6 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             lens={lens}
             rows={rows}
             ctx={ctx}
-            onViewDeal={setViewingDeal}
             today={today}
             showOwner={scope === 'all'}
             searchQuery={typed}
@@ -448,7 +445,6 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         />
       )}
 
-      {viewingDeal && <DealDetail enqId={viewingDeal} onClose={() => setViewingDeal(null)} />}
 
       {selected && (
         <InboundDrawer

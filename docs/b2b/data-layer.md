@@ -38,7 +38,9 @@ They live here now because the code cannot carry them.
 
 - **One read serves every board.** Each B2B view wants a different pipeline, but
   `fetchAllRows` makes a single `GET /api/b2b/rows` (the backend runs the four
-  per-table selects and concatenates), cached 8s, and the views narrow by
+  per-table selects and concatenates), cached 60 s (8 s until 2026-11-28; a
+  tab switch paid 1–2.3 s for the 5.4 MB read each time, and every write clears it),
+  and the views narrow by
   pipeline and date in memory. Keep it one call — do not add a per-pipeline
   endpoint and fetch four times; that is the budget regression this shape exists
   to prevent. (On Supabase this was one paged `select=*`; same contract, new

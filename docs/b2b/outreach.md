@@ -644,6 +644,44 @@ per-order revenue report, and its KPI drill-down lenses (`kpi:*`) are gone with 
 leads, from `bmOptions()`, not the 2-name roster. See the BM picker entry in
 `docs/landmines.md`.
 
+### Three groups: Calls & meetings, Carts & PIs, Sign-offs & outcomes (2026-11-28)
+
+The user asked for Outreach to be built like Inbound (`inbound.md` §Three groups): a BM
+either has calls and meetings to do or an open cart or PI to follow up, and everything
+else (sign-offs, handovers) goes in a third group. This replaced Action needed and the
+Pipeline tiles. One predicate, `lensMatches` (`lenses/utils.ts`), still gives every
+tile its count and its rows, and `outreachTiles` builds the shared `LensTiles`.
+
+| Group (head) | Tiles | Rule |
+|---|---|---|
+| Calls & meetings | Meetings today · Overdue · Due today · No meeting booked | open status, accepted (not waiting for sign-off) and **no open cart or PI** |
+| Carts & PIs | Carts open · PI open · Carts follow up · PI follow up | not Lost and not waiting for sign-off, with an open cart or PI on any of its numbers, or status PI shared |
+| Sign-offs & outcomes | Waiting for sign-off · Handover pending · Converted · Lost | the union of the four |
+
+- **Calls & meetings tiles never overlap.** A lead goes to the first that fits:
+  a meeting today, then overdue (follow-up date passed, or a scheduled meeting before
+  today not checked in or marked), then due today, then Yet to meet with no meeting
+  scheduled. A Follow up lead booked ahead is in none, as Inbound's Upcoming is.
+- **Carts come from the same Django read as Inbound** (`POST /api/b2b/inbound/deals`
+  with `outreachPhones` of every lead in scope, `useOpenDeals`), so it shares Inbound's
+  per-caller cache. It reads tickets opened since `openDealsSince` (11 Oct on
+  28 Nov), so an older open cart does not show. Open vs follow up is the same as
+  Inbound's, with a held meeting (`heldMeetings`) counting as an update as well as a
+  call.
+- **Lost leads and leads waiting for a BM's sign-off stay out of Carts & PIs** (the
+  user's rule: a cart left in Django does not keep a lead the team has closed). Their
+  row carries a "Cart still open · ₹…" marker that opens the ticket under the row.
+  Converted leads with an open cart are in Carts & PIs too (a repeat order starting).
+- **The period picks only Converted, Lost and the status pills** (Action needed, Yet
+  to meet, Follow up, Quote, PI shared, All leads); everything else is as of today.
+- **Checked on 2026-11-28** by compiling `lenses/utils.ts` and the real mapper and
+  running them on the 426 Outreach rows of `crm_real` (refreshed 27 Nov) with
+  production's 59 open tickets on their numbers: Calls & meetings 173 (Meetings
+  today 5, Overdue 83, Due today 3, No meeting booked 82), Carts & PIs 38 (Carts open
+  24, PI open 4, Carts follow up 8, PI follow up 2). Each group's tiles summed to its
+  head, and no lead was in both groups. 12 leads waiting for sign-off and 1 Lost lead
+  had an open ticket and carry the marker instead. Not yet seen in a browser.
+
 ### The page is tiles you click (UI pass, 2026-10-28)
 
 The user found the first build too texty to navigate: nine tabs, eight KPI
@@ -674,9 +712,8 @@ is a lens, and clicking it lists exactly what it counts**.
   A KPI tile opens its rows with a **Counts?** column (✓, or ✕ plus the reason)
   and an All / Counted / Not counted switch. That is how "12 meetings, +9 not
   counted" becomes nine named leads, each missing its notes.
-- **Work tiles**: *Action needed* (head; meetings today, follow-ups due, from
-  Inbound, handover) and *Pipeline* (head = all leads; one tile per stage,
-  with chevrons because it is a journey). `lensMatches` in `lenses/utils.ts` is
+- **Work tiles** (replaced 2026-11-28 by the three groups above): *Action needed*
+  and *Pipeline* (one tile per stage). `lensMatches` in `lenses/utils.ts` is
   the one predicate for each tile's count and its rows, and
   `hooks/use-outreach-lenses.ts` derives both together. On real data on
   2026-10-28, all 11 work tiles matched their table row counts.

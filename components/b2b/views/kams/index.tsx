@@ -28,10 +28,13 @@ import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { membershipIn } from '@/lib/b2b/team/utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+const ORDER_STATUS_TILES: KamLens[] = ['assigned', 'active', 'lapsing', 'inactive', 'never'];
+
 export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: Viewer }) {
   const [clients, setClients] = useState<ClientEntity[]>([]);
   const [orders, setOrders] = useState<KamOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readingOrders, setReadingOrders] = useState(true);
   const [failed, setFailed] = useState<string[]>([]);
   const [sync, setSync] = useState<{
     matched: number; noMatch: number; unavailable: number; overflow: number;
@@ -60,6 +63,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
 
   const load = useCallback(async () => {
     setLoading(true);
+    setReadingOrders(true);
     const bad: string[] = [];
     const [cl, ord] = await Promise.all([
       fetchClients().catch((e) => { console.error('[b2b] clients failed', e); bad.push('the client master'); return [] as ClientEntity[]; }),
@@ -68,10 +72,10 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
     setClients(cl);
     setOrders(ord);
     setFailed(bad);
+    setLoading(false);
 
     const phones = cl.flatMap((c) => contactNumbers(c.contacts));
-    const { deals } = await loadAggregates(phones, kamEnquiryIdsToResolve(ord));
-    setLoading(false);
+    const { deals } = await loadAggregates(phones, kamEnquiryIdsToResolve(ord)).finally(() => setReadingOrders(false));
 
     if (!ord.length) return;
     const { resolutions, overflow } = await resolveKamOrders(ord, deals, cl);
@@ -189,7 +193,7 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
 
   const lateSignoffs = firmsBy.signoff.filter((r) => firmHandoverState(r.client, nowMs) === 'overdue').length;
   const tileValue = (k: KamLens): { value: string; sub?: string; warn?: boolean } => {
-    if (loading) return { value: '…', sub: 'loading' };
+    if (loading || (readingOrders && ORDER_STATUS_TILES.includes(k))) return { value: '…', sub: loading ? 'loading' : 'reading orders' };
     if (isOrderLens(k) ? ordersFailed : clientsFailed) return { value: 'Unknown', sub: 'did not load', warn: true };
     const n = countOf(k);
     switch (k) {
@@ -316,7 +320,8 @@ export default function KAMs({ team, viewer }: { team: B2BTeamLoad; viewer: View
         )}
       />
 
-      {loading ? <p className="text-sm text-gray-400 py-8 text-center bg-white rounded-lg border border-gray-200">Loading firms and orders…</p>
+      {!loading && readingOrders && <p className="mb-2 text-[11.5px] text-gray-500">Reading order history. Status reads Unknown until it lands, a few seconds.</p>}
+      {loading ? <p className="text-sm text-gray-400 py-8 text-center bg-white rounded-lg border border-gray-200">Loading firms…</p>
         : (isOrderLens(lens) ? ordersFailed : clientsFailed) ? (
           <div className="bg-white rounded-lg border border-gray-200 py-12 flex flex-col items-center gap-3">
             <p className="text-[12px] text-gray-600">{isOrderLens(lens) ? 'The order list' : 'The client master'} did not load, so nothing here can be counted yet.</p>

@@ -148,6 +148,11 @@ Four things worth knowing before reusing it:
   a revoked or logged-out session keeps working for at most 30 s on a route that
   is already open. Failures are never cached, and the key includes the token, so
   one user's entry can't serve another's request.
+- **Concurrent checks for one session share one roster read (2026-11-28).** A cold
+  B2B tab fires several route calls at once, and each read the 300 KB roster: 10
+  identical reads in one second were measured locally, at p50 273 ms and p99 4.3 s
+  each. `verifying` holds the in-flight check per cache key. A failure still clears
+  it, so nothing failed is reused.
 - **`user_id` is a UUID string, not a number.** Django's `User.id` is a
   `UUIDField`, so the claim and `user.id` on the roster row are both compared as
   strings. Coercing either with `Number()` yields `NaN` and 401s every caller.

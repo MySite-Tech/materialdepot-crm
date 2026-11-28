@@ -1,7 +1,7 @@
 import { INBOUND_WINDOW_START } from '../../../components/b2b/constants/inbound';
 import { addDays } from '../../../components/b2b/utils/inbound';
 import { DEALS_BEFORE_WINDOW_DAYS, DEALS_MAX_LOOKBACK_DAYS, OPEN_CART_STATUSES, OPEN_PI_STATUSES } from './constants';
-import type { LeadDeals, OpenDeal, OpenDealKind } from './types';
+import type { DealCtx, LeadDeals, OpenDeal, OpenDealKind } from './types';
 
 export const dealPhone = (p: string | null | undefined): string => String(p || '').replace(/\D/g, '').slice(-10);
 
@@ -27,4 +27,12 @@ export function leadDeals(phones: string[], byPhone: Map<string, OpenDeal[]>): L
   for (const p of phones) for (const d of byPhone.get(dealPhone(p)) ?? []) seen.set(d.enqId, d);
   const all = [...seen.values()].sort(newestFirst);
   return { carts: all.filter((d) => d.kind === 'cart'), pis: all.filter((d) => d.kind === 'pi') };
+}
+
+export function dealCtx(deals: LeadDeals, o: { excluded: boolean; piByStatus: boolean; piSince: string; touched: string }): DealCtx {
+  const stage = o.excluded ? null : deals.pis.length || o.piByStatus ? 'pi' : deals.carts.length ? 'cart' : null;
+  const since = stage === 'pi'
+    ? [deals.pis[0]?.createdOn || '', o.piSince].sort().pop() || ''
+    : stage === 'cart' ? deals.carts[0].createdOn : '';
+  return { ...deals, stage, since, updated: !!o.touched && o.touched >= since };
 }

@@ -4,6 +4,7 @@ import { closureReadiness, enrichmentGaps, followUpBucket, inboundArrivalDay, in
 import { FollowUpBucket } from '../../types/inbound';
 import { InboundLead } from '../../models/mock-data';
 import type { LeadDeals } from '@/lib/b2b/inbound-deals/types';
+import { dealCtx } from '@/lib/b2b/inbound-deals/utils';
 import { LENS, LENS_GROUPS, NO_FILTERS, OUTCOME_LENSES, PRIORITY_RANK, SIDE_LENSES } from './constants';
 import type { LensPill, LensTileGroup } from '../../ui/lens-tiles';
 import { InboundFilters, LeadCtx, Lens } from './types';
@@ -30,16 +31,12 @@ const NO_DEALS: LeadDeals = { carts: [], pis: [] };
 
 const NO_CART_TAB = ['Lost', 'Invalid'];
 
-export function leadCtx(l: InboundLead, deals: LeadDeals = NO_DEALS): LeadCtx {
-  const stage = NO_CART_TAB.includes(l.stage) ? null
-    : deals.pis.length || (withInbound(l) && l.stage === 'PI Shared') ? 'pi'
-      : deals.carts.length ? 'cart' : null;
-  const since = stage === 'pi'
-    ? [deals.pis[0]?.createdOn || '', istDay(l.piSharedAt)].sort().pop() || ''
-    : stage === 'cart' ? deals.carts[0].createdOn : '';
-  const called = lastCallDay(l);
-  return { ...deals, stage, since, updated: !!called && called >= since };
-}
+export const leadCtx = (l: InboundLead, deals: LeadDeals = NO_DEALS): LeadCtx => dealCtx(deals, {
+  excluded: NO_CART_TAB.includes(l.stage),
+  piByStatus: withInbound(l) && l.stage === 'PI Shared',
+  piSince: istDay(l.piSharedAt),
+  touched: lastCallDay(l),
+});
 
 const inCalls = (c: LeadCtx) => c.stage === null;
 

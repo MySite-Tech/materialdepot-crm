@@ -8,7 +8,7 @@ import { Empty, Field, SectionCard, Spinner, errorInputCls, fmtDay, inputCls } f
 import { fmtFollowUp } from '../../../models/reminders';
 import { Loaded } from '../hooks/use-inbound-detail';
 import { Dispatch, SetStateAction, useState } from 'react';
-import { DealDetail } from '../../../ui/deal-detail';
+import { DealInline } from '../../../ui/deal-detail';
 import { dealIsOpen } from '../../../models/client';
 
 export type GateField = 'followUpDate' | 'enqId' | 'lostReason' | 'invalidCalls' | 'invalidReason' | 'invalidNote';
@@ -138,37 +138,40 @@ export function InboundStatusCard({ checkEnq, draft, enq, enqChecking, gateFor, 
       title="Carts and PIs"
       owner="deals"
       subtitle={deals.loading ? 'loading…' : deals.failed ? '' : `${openCount} open of ${tickets.length}`}
-      info="Every deal ticket on this client's numbers: the Kylas number, the primary person and everyone added. Open ones first. Click one for its products and full detail."
+      info="Every deal ticket on this client's numbers: the Kylas number, the primary person and everyone added. Open ones first. Click one to show its products and full detail under it."
     >
       {deals.loading ? <Spinner label="Loading deal tickets…" />
         : deals.failed ? <p className="text-[12px] text-amber-700">The deal tickets did not load, so carts and PIs are unknown here. This is not an empty list.</p>
           : tickets.length === 0 ? <Empty>No cart or PI on this client&apos;s numbers yet.</Empty>
             : (
-              <div className="flex flex-col divide-y divide-gray-100 border border-gray-100 rounded-md max-h-[260px] overflow-y-auto">
+              <div className="flex flex-col divide-y divide-gray-100 border border-gray-100 rounded-md">
                 {tickets.map((d) => {
                   const on = (draft.enqId || '').trim() === d.id;
                   const open = dealIsOpen(d.status);
+                  const shown = viewing === d.id;
                   return (
-                    <div key={d.ticketId ?? d.id} className={`flex items-center gap-2 pr-3 ${on ? 'bg-[#0F766E]/[0.06]' : ''}`}>
-                      <button onClick={() => setViewing(d.id)} className="flex-1 min-w-0 text-left pl-3 py-2 flex items-center justify-between gap-2 hover:bg-gray-50 rounded-md">
+                    <div key={d.ticketId ?? d.id}>
+                    <div className={`flex items-center gap-2 pr-3 ${on ? 'bg-[#0F766E]/[0.06]' : ''}`}>
+                      <button onClick={() => setViewing(shown ? null : d.id)} aria-expanded={shown} className="flex-1 min-w-0 text-left pl-3 py-2 flex items-center justify-between gap-2 hover:bg-gray-50 rounded-md">
                         <span className="min-w-0">
                           <span className="text-[12px] font-mono font-medium text-gray-800">{d.id}</span>
                           <span className={`ml-2 text-[10.5px] font-medium rounded px-1 ${open ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-500'}`}>{d.status}</span>
                           {on && <span className="ml-1.5 text-[10.5px] font-medium text-[#0F766E]">picked</span>}
                           <span className="block text-[11px] text-gray-400 truncate">{[d.branch, d.assignedTo, d.createdAt && `opened ${fmtDay(d.createdAt)}`].filter(Boolean).join(' · ')}</span>
                         </span>
-                        <span className="text-[12px] font-mono text-gray-700 whitespace-nowrap">{d.cartValue ? fmtINR(d.cartValue) : '—'}</span>
+                        <span className="text-[12px] font-mono text-gray-700 whitespace-nowrap">{d.cartValue ? fmtINR(d.cartValue) : '—'}<span className="ml-1.5 text-gray-400">{shown ? '▴' : '▾'}</span></span>
                       </button>
                       {needsEnq && !on && (
                         <button onClick={() => pick(d.id)} className="shrink-0 text-[11.5px] font-medium text-[#0F766E] hover:underline whitespace-nowrap">Use as Enq ID</button>
                       )}
+                    </div>
+                    {shown && <div className="px-2 pb-2"><DealInline enqId={d.id} /></div>}
                     </div>
                   );
                 })}
               </div>
             )}
     </SectionCard>
-    {viewing && <DealDetail enqId={viewing} onClose={() => setViewing(null)} />}
     </>
   );
 }

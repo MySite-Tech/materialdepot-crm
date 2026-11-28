@@ -1,6 +1,7 @@
 import { OutreachLead } from '../../models/mock-data';
 import { Rep } from '../../models/outreach/intake';
 import { Reminder } from '../../models/outreach/reminders';
+import type { DealCtx } from '@/lib/b2b/inbound-deals/types';
 
 export interface OutreachScope {
   mode: 'team' | 'mine' | 'open';
@@ -17,21 +18,22 @@ export interface OutreachScope {
 export type SaveLead = (before: OutreachLead | null, after: OutreachLead) => Promise<string | null>;
 
 export type WorkLens =
-  | 'action' | 'meetings' | 'followups' | 'inbox' | 'handoff'
-  | 'all' | 'yet' | 'fu' | 'quote' | 'pi' | 'won' | 'lost'
+  | 'work' | 'meetings' | 'overdue' | 'due' | 'book'
+  | 'deals' | 'cartOpen' | 'piOpen' | 'cartFollow' | 'piFollow'
+  | 'other' | 'inbox' | 'handoff' | 'won' | 'lost'
+  | 'action' | 'all' | 'yet' | 'fu' | 'quote' | 'pi'
   | 'signoff' | 'signed';
 
 export interface LensRow {
   lead: OutreachLead;
   reminders: Reminder[];
+  deal: DealCtx;
 }
 
 export interface LensGroup {
   title: string;
   head?: WorkLens;
   lenses: WorkLens[];
-  weight: number;
-  flow?: boolean;
 }
 
 export type RangeKey = 'any' | 'today' | 'week' | 'last7' | 'last30' | 'month' | 'last-month' | 'custom';
