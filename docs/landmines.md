@@ -7,7 +7,7 @@ Bugs that have already been shipped and fixed here, kept because the shape recur
 
 ## Contents
 
-110 entries. They live in one file because they cross-reference each other —
+111 entries. They live in one file because they cross-reference each other —
 grep for a term, then read around the line you hit rather than opening all of it.
 
 - A route handler holding the service-role key is the access check — RLS is not
@@ -121,6 +121,7 @@ grep for a term, then read around the line you hit rather than opening all of it
 - Django's order read starts in April 2026, so any lookback before then reads as "no order"
 - One client held two Outreach leads, so the converted one sat beside a stale Follow up
 - An explanation in a native `title` shows only after the pointer rests, and never on a click
+- Logging a call saved the drawer's unsaved stage with no stage date
 
 - **The Category Revenue tab was compared against Metabase for months while
   filtering on a different date.** It sent `created_from`/`created_to` — the
@@ -1744,3 +1745,16 @@ no scroll box clips it. `Field` and `SectionCard` take `info` to use it. **Put a
 explanation people are meant to read in `Hint`, not in `title`.** A `title` is still
 fine for a truncated value's full text.
 
+### Logging a call saved the drawer's unsaved stage with no stage date (2026-11-28)
+
+A Lost Inbound lead (Vikas, 21 Nov) had no Lost date, so the Outcomes list read "—"
+and adherence treated the stage as carried over from before the gates. Of the 493
+Inbound leads created since 1 Nov that had left New, 126 had no `statusChangedAt`,
+124 of them with logged calls. Logging a call saves the whole draft, including a
+stage the rep picked but had not saved, and the call log stamped the date only when
+the new stage differed from the **draft's** stage, which already held it. The Save
+that followed compared against the lead as opened, by then refreshed to the
+unstamped stage, and found no change either. The shape: a stamp decided by
+comparing against unsaved state. Both paths now stamp with `withStatusStamps`
+against the saved row (`saved.current`, `base()`). Rows already written stay
+unstamped (`docs/b2b/inbound.md` §The call log).

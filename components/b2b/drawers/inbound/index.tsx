@@ -158,7 +158,7 @@ export default function InboundDrawer({
     setSave({ saving: true });
 
     const at = new Date().toISOString();
-    const toSave: InboundLead = withRequirementHistory(saved.current, withStatusStamps(lead, {
+    const toSave: InboundLead = withRequirementHistory(saved.current, withStatusStamps(saved.current, {
       ...draft,
       ...extra,
       company: draft.companyName?.trim() || draft.company,
