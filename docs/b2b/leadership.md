@@ -74,6 +74,13 @@ with `counts` and a reason, the same contract as `outreachKpis`.
   firm's order history). Otherwise a value with no denominator renders "—". The
   first build showed every Sunday's adherence as "Unknown".
 
+**The Outreach scorecard lives only here (2026-11-28).** The user removed it from the
+top of the Outreach tab: Calls, New meetings, Follow-ups, CRM adherence, Coverage,
+Conversions, Waitlist, KAM handover and Revenue are the same `OUTREACH_KPIS` through the
+same `outreachKpis`, per person, with the rows behind each figure. Outreach keeps its BM
+and period, now in its filter bar, for the pipeline and the lists. Outreach no longer
+reads the per-order revenue report on open, which saved one request there.
+
 ### Targets
 
 The KPI sheet's numbers are the **defaults** in each engine's defs (`target`).

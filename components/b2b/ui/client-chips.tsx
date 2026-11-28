@@ -5,7 +5,7 @@ import { CLIENT_STATUS_SCALE, ClientOrderMetrics, StatusScale, temperatureColor 
 export function StatTile({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5 min-w-0">
-      <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 truncate" title={label}>{label}</div>
+      <div className="text-[11.5px] text-gray-500 truncate" title={label}>{label}</div>
       <div className="text-xl font-bold mt-0.5 truncate" style={{ color: tone || '#1F2937' }}>{value}</div>
       {sub && <div className="text-[10px] text-gray-400 leading-tight mt-0.5">{sub}</div>}
     </div>

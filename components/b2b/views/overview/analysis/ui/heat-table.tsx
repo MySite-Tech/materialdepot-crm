@@ -3,7 +3,7 @@
 import { fmtL } from '../../../../models/mock-data';
 import type { MonthWindow, RevenueOrder } from '@/lib/b2b/revenue';
 import { useMemo } from 'react';
-import { Hint } from '../../ui';
+import { Hint } from '../../../../ui/info-tip';
 import { DIM_META, HEAT_ROWS } from '../constants';
 import type { DimKey } from '../types';
 import { heatRows, totals } from '../utils';

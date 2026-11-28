@@ -1,7 +1,7 @@
 'use client';
 
 import { fmtL } from '../../../../models/mock-data';
-import { Hint } from '../../ui';
+import { Hint } from '../../../../ui/info-tip';
 import { DIM_META, DROP, GAIN } from '../constants';
 import type { ChangeRow, DimKey } from '../types';
 import { signedL } from '../utils';

@@ -13,7 +13,9 @@ actually using them.
 
 Opening a client opens the shared Firm page (`components/b2b/drawers/firm/`,
 see `client-db.md`). `views/kams/drawer.tsx` only adds the KAM-only sections:
-calls and meetings, the KAM pipeline and escalations. So a number or GSTIN
+calls and meetings, the KAM pipeline and escalations, which since 2026-11-28 fill
+the page's Activity tab, open by default from KAM (`client-db.md` §The firm page
+has tabs). So a number or GSTIN
 added on either tab shows on the other, because both edit the same client row.
 
 ### The old board's seven stages, mapped on READ
@@ -123,6 +125,13 @@ moment the KAM logs the call, and nothing is ticked off by hand. Verified live.
 Open question #3 (a floor on the queue) is answered no — an old unactioned
 follow-up sits there indefinitely, because dropping it is how an account goes
 quiet with nobody deciding to let it. `queueAgeBand` marks the age instead.
+
+### Filters (2026-11-28)
+
+Search, KAM (managers only), Segment and Source sit in the shared filter bar
+(`ui/filter-bar.tsx`), the same one Inbound and Outreach use: each filter is a chip showing
+its value, teal with a × when set, with Clear all. The predicates are unchanged; only the
+controls moved (`inbound.md` §Filters).
 
 ### The tiles are the navigation (2026-10-28)
 

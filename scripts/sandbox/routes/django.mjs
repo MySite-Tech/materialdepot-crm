@@ -49,11 +49,13 @@ const list = (query, key) => String(query.get(key) || '').split(',').map((s) => 
 function filterDeals(deals, query) {
   const q = String(query.get('q') || '').trim().toLowerCase();
   const enq = new Set(list(query, 'enquiry_ids').map((s) => s.toUpperCase()));
-  const status = query.get('status');
+  const statuses = list(query, 'status');
+  const createdFrom = query.get('created_from') || '';
   const bm = query.get('bm');
   return deals.filter((d) => {
     if (enq.size && !enq.has(d.id.toUpperCase())) return false;
-    if (status && d.status !== status) return false;
+    if (statuses.length && !statuses.includes(d.status)) return false;
+    if (createdFrom && String(d.createdAt).slice(0, 10) < createdFrom) return false;
     if (bm && tenDigits(bm) !== d.assigneePhone && bm !== d.assignedTo) return false;
     if (!q) return true;
     const qd = tenDigits(q);

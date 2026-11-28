@@ -80,9 +80,10 @@ export function ReferralsCard({ kind, referrerId, referrerName, by, studio = [],
   return (
     <SectionCard
       title="Referred clients"
-      subtitle={failed ? 'Could not load' : list === null ? 'Loading…' : `${count} referred · their orders count as Referred`}
+      subtitle={failed ? 'Could not load' : list === null ? 'Loading…' : `${count} referred`}
+      info="When this client sends their own client to Material Depot, add them here. Their orders count as Referred."
       right={!adding && (
-        <button onClick={() => setAdding(true)} className="text-[12px] font-semibold text-gray-700 hover:text-gray-900">+ Add referral</button>
+        <button onClick={() => setAdding(true)} className="text-[12px] font-medium text-[#0F766E] hover:underline">+ Add referral</button>
       )}
     >
       {note}
@@ -98,7 +99,7 @@ export function ReferralsCard({ kind, referrerId, referrerName, by, studio = [],
       {message && <p className={`text-[12px] mb-2 ${message.tone === 'ok' ? 'text-teal-700' : 'text-amber-700'}`}>{message.text}</p>}
       {failed && <p className="text-[12px] text-amber-700">The referral list did not load. This does not mean there are none.</p>}
       {!failed && list !== null && count === 0 && !adding && (
-        <p className="text-[12px] text-gray-500">No referrals yet. When this client sends their own client to Material Depot, add them here so the order counts.</p>
+        <p className="text-[12px] text-gray-400">No referrals yet.</p>
       )}
       {count > 0 && (
         <ul className="divide-y divide-gray-100">

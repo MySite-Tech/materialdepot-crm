@@ -22,8 +22,8 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
   showGates: boolean;
 }) {
   return (
-    <SectionCard title="Status" owner="crm" subtitle={OUTREACH_STATUS_HINT[draft.status]}>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <SectionCard title="Status" info={OUTREACH_STATUS_HINT[draft.status]}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
         <Field label="Status" required>
           <select value={draft.status} onChange={(e) => set('status', e.target.value as OutreachStatus)} className={inputCls}>
             {OUTREACH_STATUSES.map((s) => <option key={s} value={s}>{OUTREACH_STATUS_LABEL[s]}</option>)}
@@ -35,7 +35,7 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
               label="Next follow-up"
               required={draft.status === 'Follow up' || draft.status === 'PI Shared'}
               error={gateFor('followUpDate')}
-              hint={draft.status === 'Follow up' || draft.status === 'PI Shared' ? undefined : 'Required once a meeting is held, unless the next one is booked'}
+              info={draft.status === 'Follow up' || draft.status === 'PI Shared' ? undefined : 'Required once a meeting is held, unless the next one is booked.'}
             >
               <input
                 type="date"
@@ -44,7 +44,7 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
                 className={gateFor('followUpDate') ? errorInputCls : inputCls}
               />
             </Field>
-            <Field label="Time" hint="Optional. Reminders show it an hour before.">
+            <Field label="Time" info="Optional. Reminders bring it forward an hour before.">
               <input type="time" value={draft.followUpTime || ''} onChange={(e) => set('followUpTime', e.target.value || undefined)} className={inputCls} />
             </Field>
           </>
@@ -53,12 +53,9 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
     
       {(draft.status === 'PI Shared' || draft.status === 'Closed') && (
         <div className="mt-4 pt-4 border-t border-gray-100">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">From Procurement</span>
-            <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Deals</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Enq ID" hint="Matched exactly against the deal tickets on this number">
+          <p className="text-[12px] font-medium text-gray-700 mb-2">From the deal ticket</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <Field label="Enq ID" info="Matched exactly against the deal tickets on this client's numbers. Picking a cart under Carts and PIs fills it.">
               <div className="flex items-center gap-1.5">
                 <input value={draft.enqId || ''} onChange={(e) => set('enqId', e.target.value)} placeholder="ENQ-…" className={inputCls} />
                 <button
@@ -89,7 +86,7 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
           </div>
     
           {enq?.status === 'matched' && (
-            <div className="mt-2.5 rounded-md border border-[#0F766E]/25 bg-[#0F766E]/5 px-3 py-2 text-[11.5px] text-gray-700 leading-snug">
+            <div className="mt-2.5 rounded-md border border-[#0F766E]/25 bg-[#0F766E]/5 px-3 py-2 text-[12px] text-gray-700 leading-snug">
               Matched ticket <strong>{draft.enqId}</strong> — {fmtINR(enq.orderValue || 0)}
               {enq.dealStatus ? ` · ${enq.dealStatus}` : ''}
               {enq.bmName ? ` · assigned to ${enq.bmName}` : ''}
@@ -105,7 +102,7 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
             </p>
           )}
           {enq?.status === 'no-match' && (
-            <div className="mt-2.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800 leading-snug">
+            <div className="mt-2.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 leading-snug">
               No deal ticket on this number carries that Enq ID exactly, so nothing was fetched —
               type the value if you have it.
               {enq.available?.length
@@ -114,7 +111,7 @@ export function OutreachStatusCard({ checkEnq, draft, enq, enqChecking, enqDeal,
             </div>
           )}
           {enq?.status === 'unavailable' && (
-            <div className="mt-2.5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11.5px] text-red-700 leading-snug">
+            <div className="mt-2.5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 leading-snug">
               The deal system did not answer. That is not evidence your Enq ID is wrong — try the
               fetch again in a moment.
             </div>

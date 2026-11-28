@@ -6,7 +6,8 @@ import { useOrderCredits } from '../../../../order-credit/hooks/use-order-credit
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMonthReport } from '../../hooks/use-month-report';
 import { useRevenueTrend } from '../../hooks/use-revenue-trend';
-import { Card, Hint, LinkButton, Notice, Pill, Segmented, Stat } from '../../ui';
+import { Card, LinkButton, Notice, Pill, Segmented, Stat } from '../../ui';
+import { Hint } from '../../../../ui/info-tip';
 import { monthPace } from '../../utils';
 import { MONTHS_OFFERED, TEAM_OPTIONS } from './constants';
 import { Breakdown } from './ui/breakdown';

@@ -8,23 +8,26 @@ import { HandoverCard } from './cards/handover';
 import { DeleteFirm } from './cards/delete-firm';
 import { EnquiryActions, OrdersCard } from './cards/orders';
 import { ReferredClientsCard } from './cards/referred-clients';
-import { SpocsCard } from './cards/spocs';
+import { SpocReadState, SpocSalesCard, SpocsCard } from './cards/spocs';
+import { FirmDrawerHeader, FirmTab, FirmTabDef } from './header';
 import { useEcVisits } from './hooks/use-ec-visits';
 import { useFirmLinks } from './hooks/use-firm-links';
 import { useFirmOrders } from './hooks/use-firm-orders';
-import { fmtDate } from './utils';
+import { useFirmSpocs } from './hooks/use-firm-spocs';
+import { fmtDate, orderTab } from './utils';
 import { ClientEntity, ClientOrderMetrics, ClientStatus, contactNumbers, gstNumbers, lastOrderInFuture, nextStatus } from '../../models/client';
+import { istToday } from '../../models/inbound';
 import { fmtShortINR } from '../../models/mock-data';
 import { Rep } from '../../models/outreach/intake';
-import { Metric, StatTile, StatusPill } from '../../ui/client-chips';
-import { btnGhost } from '../../constants/ui';
-import { ClientOrderHistory } from '@/lib/b2b';
+import { Metric, StatTile } from '../../ui/client-chips';
+import { ClientOrderHistory, ClientOrderRow } from '@/lib/b2b';
 import type { B2BTeam } from '@/lib/b2b/team/types';
 import { useEffect, useMemo, useState } from 'react';
 
 const NO_PEOPLE: Record<B2BTeam, Rep[]> = { inbound: [], outreach: [], kam: [] };
+const NO_ROWS: ClientOrderRow[] = [];
 
-export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, kams = [], people = NO_PEOPLE, onClose, onSave, onEdit, onDelete, canAddStudioNumber, children }: {
+export function FirmDrawer({ client, clients, metrics, status, days, historyFor, badges, reassignReason, assignAs, kams = [], people = NO_PEOPLE, onClose, onSave, onEdit, onDelete, canAddStudioNumber, activityBadge, children }: {
   client: ClientEntity;
   clients: ClientEntity[];
   metrics: ClientOrderMetrics;
@@ -41,6 +44,7 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
   onEdit?: () => void;
   onDelete?: (c: ClientEntity) => Promise<string | null>;
   canAddStudioNumber?: boolean;
+  activityBadge?: string;
   children?: React.ReactNode;
 }) {
   const phones = useMemo(() => contactNumbers(client.contacts), [client.contacts]);
@@ -48,8 +52,11 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
   const orders = useFirmOrders(phones, gstins);
   const links = useFirmLinks(client);
   const ec = useEcVisits(client.id, phones);
+  const rows = orders.details?.rows ?? NO_ROWS;
+  const { isB2B, spocs, sales } = useFirmSpocs(client, links.links, rows, people);
+  const [tab, setTab] = useState<FirmTab>(children ? 'activity' : 'overview');
   const [via, setVia] = useState<string | null>(null);
-  const [kamPicker, setKamPicker] = useState(0);
+  const [kamPicker, setKamPicker] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -57,94 +64,109 @@ export function FirmDrawer({ client, clients, metrics, status, days, historyFor,
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const facts = [client.clientType || 'Type not set', client.segment ? `Segment ${client.segment}` : 'No segment', client.source];
+  const read: SpocReadState = { linksLoading: links.loading, linksFailed: links.failed, ordersLoading: orders.loading, ordersFailed: orders.failed };
+  const openDeals = useMemo(() => rows.filter((r) => { const t = orderTab(r); return t === 'pi' || t === 'open'; }).length, [rows]);
+  const today = istToday();
+  const upcoming = ec.visits.filter((v) => v.status === 'Scheduled' && (v.visitDate || '') >= today).length;
+  const canAssign = assignAs !== undefined;
+
+  const tabs: FirmTabDef[] = [
+    ...(children ? [{ key: 'activity' as const, label: 'Activity', badge: activityBadge }] : []),
+    { key: 'overview', label: 'Overview' },
+    { key: 'orders', label: 'Orders', badge: orders.loading || orders.failed ? undefined : openDeals ? `${openDeals} open` : undefined },
+    { key: 'people', label: 'People', badge: phones.length ? undefined : 'no number', warn: true },
+    { key: 'ec', label: 'EC & handover', badge: ec.loading || ec.error ? undefined : upcoming ? `${upcoming} upcoming` : undefined },
+    { key: 'referrals', label: 'Referrals' },
+  ];
+
+  const pickKam = () => { setTab('overview'); setKamPicker(true); };
+  const showVia = (phone: string | null) => { setVia(phone); if (phone) setTab('orders'); };
 
   return (
     <div className="fixed inset-0 z-[1150] flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full sm:w-[880px] max-w-full bg-gray-50 h-full overflow-y-auto shadow-xl">
-        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 pt-5 pb-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-[18px] font-bold text-gray-900 truncate">{client.company || <span className="text-gray-400 italic">Unnamed firm</span>}</h2>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <StatusPill status={status} days={days} />
-                {badges}
-                <span className="text-[12px] text-gray-500">{facts.join(' · ')}</span>
+      <div className="relative w-full sm:w-[880px] max-w-full bg-[#F7F7F8] h-full overflow-y-auto shadow-xl flex flex-col">
+        <FirmDrawerHeader
+          client={client}
+          status={status}
+          days={days}
+          badges={badges}
+          spocs={spocs}
+          read={read}
+          onPeople={canAssign ? () => setTab('people') : undefined}
+          onEdit={onEdit}
+          onClose={onClose}
+          tabs={tabs}
+          tab={tab}
+          onTab={setTab}
+        />
+
+        <div className="p-4 flex flex-col gap-3">
+          {tab === 'activity' && children}
+
+          {tab === 'overview' && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <StatTile label="Lifetime revenue" value={<Metric value={metrics.totalRevenue} state={metrics.dateState} format={fmtShortINR} />} />
+                <StatTile label="Orders" value={<Metric value={metrics.orders} state={metrics.dateState} />} sub={metrics.enquiries !== undefined ? `of ${metrics.enquiries} enquiries` : undefined} />
+                <StatTile label="Avg order" value={<Metric value={metrics.averageOrderValue} state={metrics.dateState} format={fmtShortINR} />} />
+                <StatTile
+                  label="Last order"
+                  value={<span className="text-[15px]"><Metric value={metrics.lastOrderPlaced ? fmtDate(metrics.lastOrderPlaced) : undefined} state={metrics.dateState} /></span>}
+                  sub={days !== undefined ? `${days} days until ${nextStatus(status)}` : undefined}
+                />
+                <StatTile label="Open carts" value={<Metric value={metrics.openValue} state={metrics.dateState} format={fmtShortINR} />} />
               </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {onEdit && <button onClick={onEdit} className={btnGhost}>Edit details</button>}
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none cursor-pointer" aria-label="Close">×</button>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-6 py-5 flex flex-col gap-4">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            <StatTile label="Lifetime revenue" value={<Metric value={metrics.totalRevenue} state={metrics.dateState} format={fmtShortINR} />} />
-            <StatTile label="Orders" value={<Metric value={metrics.orders} state={metrics.dateState} />} sub={metrics.enquiries !== undefined ? `of ${metrics.enquiries} enquiries` : undefined} />
-            <StatTile label="Avg order" value={<Metric value={metrics.averageOrderValue} state={metrics.dateState} format={fmtShortINR} />} />
-            <StatTile
-              label="Last order"
-              value={<span className="text-[15px]"><Metric value={metrics.lastOrderPlaced ? fmtDate(metrics.lastOrderPlaced) : undefined} state={metrics.dateState} /></span>}
-              sub={days !== undefined ? `${days} days until ${nextStatus(status)}` : undefined}
-            />
-            <StatTile label="Open carts" value={<Metric value={metrics.openValue} state={metrics.dateState} format={fmtShortINR} />} />
-          </div>
-          {lastOrderInFuture(metrics) && (
-            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-              The last order date Django served is after today, so it cannot be a real order. The status is Unknown until Django serves the real order placed date.
-            </p>
-          )}
-          {metrics.dateState === 'unavailable' && (
-            <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
-              Some of this firm&apos;s order figures could not be read, so the status is Unknown rather than a guess.
-            </p>
+              {lastOrderInFuture(metrics) && (
+                <p className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  The last order date Django served is after today, so it cannot be a real order. The status is Unknown until Django serves the real order placed date.
+                </p>
+              )}
+              {metrics.dateState === 'unavailable' && (
+                <p className="text-[12px] text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
+                  Some of this firm&apos;s order figures could not be read, so the status is Unknown rather than a guess.
+                </p>
+              )}
+              <AccountCard key={client.kam || ''} client={client} reassignReason={reassignReason} assignAs={assignAs} kams={kams} picking={kamPicker} onPicking={setKamPicker} onSave={onSave} />
+            </>
           )}
 
-          <SpocsCard
-            client={client}
-            links={links.links}
-            linksLoading={links.loading}
-            linksFailed={links.failed}
-            orders={orders.details?.rows ?? []}
-            ordersLoading={orders.loading}
-            ordersFailed={orders.failed}
-            assignAs={assignAs}
-            people={people}
-            onChangeKam={() => setKamPicker((n) => n + 1)}
-            onSave={onSave}
-          />
+          {tab === 'orders' && (
+            <>
+              <OrdersCard
+                details={orders.details}
+                loading={orders.loading}
+                failed={orders.failed}
+                phones={phones}
+                historyFor={historyFor}
+                via={via}
+                onClearVia={() => setVia(null)}
+                onRecheck={orders.recheck}
+                renderActions={(r) => <EnquiryActions client={client} row={r} ec={ec} people={people} assignAs={assignAs} onSave={onSave} />}
+              />
+              <SpocSalesCard sales={sales} loading={orders.loading} failed={orders.failed} />
+            </>
+          )}
 
-          <HandoverCard lead={links.links.handover} failed={links.failed} />
+          {tab === 'people' && (
+            <>
+              <SpocsCard client={client} spocs={spocs} isB2B={isB2B} read={read} assignAs={assignAs} people={people} onChangeKam={pickKam} onSave={onSave} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                <ContactsCard client={client} clients={clients} canAddStudioNumber={canAddStudioNumber} historyFor={historyFor} via={via} onVia={showVia} onSave={onSave} />
+                <GstsCard client={client} clients={clients} onSave={onSave} />
+              </div>
+              {onDelete && <DeleteFirm client={client} onDelete={onDelete} />}
+            </>
+          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-            <ContactsCard client={client} clients={clients} canAddStudioNumber={canAddStudioNumber} historyFor={historyFor} via={via} onVia={setVia} onSave={onSave} />
-            <GstsCard client={client} clients={clients} onSave={onSave} />
-          </div>
+          {tab === 'ec' && (
+            <>
+              <EcVisitsCard client={client} ec={ec} />
+              <HandoverCard lead={links.links.handover} failed={links.failed} />
+            </>
+          )}
 
-          <OrdersCard
-            details={orders.details}
-            loading={orders.loading}
-            failed={orders.failed}
-            phones={phones}
-            historyFor={historyFor}
-            via={via}
-            onClearVia={() => setVia(null)}
-            onRecheck={orders.recheck}
-            renderActions={(r) => <EnquiryActions client={client} row={r} ec={ec} people={people} assignAs={assignAs} onSave={onSave} />}
-          />
-
-          <ReferredClientsCard client={client} metrics={metrics} />
-
-          <EcVisitsCard client={client} ec={ec} />
-
-          {children}
-
-          <AccountCard key={client.kam || ''} client={client} reassignReason={reassignReason} assignAs={assignAs} kams={kams} openNonce={kamPicker} onSave={onSave} />
-
-          {onDelete && <DeleteFirm client={client} onDelete={onDelete} />}
+          {tab === 'referrals' && <ReferredClientsCard client={client} metrics={metrics} />}
         </div>
       </div>
     </div>

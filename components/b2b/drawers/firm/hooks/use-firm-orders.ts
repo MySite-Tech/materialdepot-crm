@@ -24,8 +24,6 @@ export function useFirmOrders(phones: string[], gstins: string[] = []) {
     setFailed(false);
     Promise.all([
       list.length ? fetchClientOrderRows(list) : Promise.resolve<ClientOrderDetails>({ rows: [], failedPhones: [], rejected: 0 }),
-      // Enquiries billed to the firm's GSTINs but raised on a number not on the
-      // firm — folded in and deduped against the phone-matched rows by enquiry.
       glist.length ? fetchOrdersByGst(glist).catch((e) => { console.error('[b2b] firm gst orders failed', e); return []; }) : Promise.resolve([]),
     ])
       .then(([byPhone, byGst]) => {

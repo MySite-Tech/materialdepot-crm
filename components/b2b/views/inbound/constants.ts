@@ -1,7 +1,7 @@
 'use client';
 
 import { INBOUND_STATUS_COLORS } from '../../models/inbound';
-import { InboundFilters, Lens, LensMeta } from './types';
+import { InboundFilters, Lens, LensGroup, LensMeta } from './types';
 
 export const PRIORITY_RANK: Record<string, number> = { P1: 0, P2: 1, P3: 2, '': 3 };
 
@@ -12,12 +12,14 @@ export const NO_FILTERS: InboundFilters = {
   location: 'all', kylasStage: 'all', createdFrom: '', createdTo: '',
 };
 
-const CALL_RULE = 'Open leads not sent to Outreach, already called at least once';
+const CALL_RULE = 'Leads still in the call phase: open, not sent to Outreach, no open cart or PI, already called at least once';
+
+const DEAL_RULE = 'Open leads with a cart or PI open on any of their numbers. Carts and PIs are read from the deal tickets every 5 minutes';
 
 export const LENS: Record<Lens, LensMeta> = {
   today: {
-    title: 'Call today',
-    rule: "First calls, then today's follow-ups, then overdue ones. A lead that arrives after 7 pm counts from the next working day.",
+    title: 'Calls',
+    rule: "Leads in the call phase: first calls, then today's follow-ups, then overdue ones. A lead with an open cart or PI moves to Carts & PIs. A lead that arrives after 7 pm counts from the next working day.",
     empty: 'Nothing to call today.',
     accent: '#1A1A1A',
   },
@@ -40,34 +42,40 @@ export const LENS: Record<Lens, LensMeta> = {
     accent: '#DC2626',
   },
   ready: {
-    title: 'Ready to close',
-    rule: '5 RNRs in the last 7 days, or 7+ days old with 5+ calls and still not at Follow up. Close them as Lost, or send them on.',
-    empty: 'Nothing is ready to close.',
+    title: 'Needs a decision',
+    rule: 'Leads the calls are not moving: 5 RNRs in the last 7 days, or 7+ days old with 5+ calls and still not at Follow up. Decide: close as Lost, or keep going and send them on.',
+    empty: 'No lead needs a decision.',
     accent: '#B45309',
   },
-  open: {
-    title: 'Pipeline',
-    rule: 'Every open lead still with Inbound: New, Connected, Follow up or PI Shared. A lead sent to Outreach leaves the pipeline and counts only under Sent to Outreach.',
-    empty: 'No open lead.',
-    accent: '#6B7280',
+  deals: {
+    title: 'Carts & PIs',
+    rule: `${DEAL_RULE}. A PI also counts when the lead's status is PI Shared. These come before ordinary calls.`,
+    empty: 'No open lead has a cart or PI open.',
+    accent: '#4F46E5',
   },
-  nurture: {
-    title: 'Connected',
-    rule: 'Spoke to them, nothing live yet. Moves to Follow up once there is a requirement, and leaves once sent to Outreach.',
-    empty: 'No connected lead waiting.',
-    accent: INBOUND_STATUS_COLORS['Connected - Need nurturing'],
+  cartOpen: {
+    title: 'Carts open',
+    rule: `${DEAL_RULE}. A cart (In Cart) with no call logged since it was opened, so nobody has taken an update yet.`,
+    empty: 'Every open cart has had an update call.',
+    accent: '#6366F1',
   },
-  followup: {
-    title: 'Follow up',
-    rule: 'A live requirement being worked towards a PI.',
-    empty: 'No lead on Follow up.',
-    accent: INBOUND_STATUS_COLORS['Follow up'],
-  },
-  pi: {
-    title: 'PI shared',
-    rule: 'A PI is out. The value is the deal ticket picked as its Enq ID.',
-    empty: 'No PI is out.',
+  piOpen: {
+    title: 'PI open',
+    rule: `${DEAL_RULE}. A PI (Quote Approval Pending, Availability Check, Hold Stock, or status PI Shared) with no call logged since it was raised.`,
+    empty: 'Every open PI has had an update call.',
     accent: INBOUND_STATUS_COLORS['PI Shared'],
+  },
+  cartFollow: {
+    title: 'Carts follow up',
+    rule: `${DEAL_RULE}. An open cart already called since it was opened, by next follow-up date, overdue first.`,
+    empty: 'No cart is being followed up.',
+    accent: '#818CF8',
+  },
+  piFollow: {
+    title: 'PI follow up',
+    rule: `${DEAL_RULE}. An open PI already called since it was raised, by next follow-up date, overdue first.`,
+    empty: 'No PI is being followed up.',
+    accent: '#A855F7',
   },
   results: {
     title: 'Outcomes',
@@ -119,7 +127,7 @@ export const LENS: Record<Lens, LensMeta> = {
   },
   all: {
     title: 'All leads',
-    rule: 'Every loaded lead, newest first.',
+    rule: 'Every lead since 10 Nov, newest first.',
     empty: 'No leads match these filters.',
     accent: '#6B7280',
   },
@@ -131,11 +139,14 @@ export const LENS: Record<Lens, LensMeta> = {
   },
 };
 
-export const LENS_GROUPS: { title: string; head: Lens; lenses: Lens[] }[] = [
-  { title: 'Call today', head: 'today', lenses: ['new', 'due', 'overdue', 'ready'] },
-  { title: 'Pipeline', head: 'open', lenses: ['nurture', 'followup', 'pi'] },
-  { title: 'Outcomes', head: 'results', lenses: ['sent', 'closed', 'lost', 'invalid'] },
+export const LENS_GROUPS: { key: LensGroup; title: string; head: Lens; lenses: Lens[] }[] = [
+  { key: 'calls', title: 'Calls', head: 'today', lenses: ['new', 'due', 'overdue', 'ready'] },
+  { key: 'deals', title: 'Carts & PIs', head: 'deals', lenses: ['cartOpen', 'piOpen', 'cartFollow', 'piFollow'] },
+  { key: 'results', title: 'Outcomes', head: 'results', lenses: ['sent', 'closed', 'lost', 'invalid'] },
 ];
+
+export const lensGroupOf = (lens: Lens): LensGroup =>
+  LENS_GROUPS.find((g) => g.head === lens || g.lenses.includes(lens))?.key ?? 'side';
 
 export const SIDE_LENSES: Lens[] = ['arrived', 'upcoming', 'undated', 'gaps', 'all'];
 

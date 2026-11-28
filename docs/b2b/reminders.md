@@ -23,7 +23,7 @@ alert. Each source uses the rule its own tab already uses, so the counts agree:
 
 | Kind | Included when | Owner test (the tab's own) |
 |---|---|---|
-| Inbound call-back | `awaitsFollowUp(l)` (moved from `views/inbound/utils.ts`, which the Due today and Overdue tiles read; false once the lead is sent to Outreach, 2026-11-14) and a follow-up date | `ownerId` = the person's Inbound Kylas id |
+| Inbound call-back | `awaitsFollowUp(l)` (moved from `views/inbound/utils.ts`, which the Due today and Overdue tiles read; false once the lead is sent to Outreach, 2026-11-14), `inInboundWindow(l)` (only leads since 10 Nov, the Inbound tab's own window, 2026-11-28, `inbound.md` §Only leads since 10 Nov) and a follow-up date | `ownerId` = the person's Inbound Kylas id |
 | Outreach follow-up | `OUTREACH_OPEN_STATUSES` and a follow-up date | `repOwns` (BM phone, then `sameRep`) |
 | Outreach meeting | a `Scheduled` meeting with a date, on an open lead | same |
 | KAM follow-up | the firm has a KAM and `nextFollowUp(interactions)` gives a date | `ownsFirm` |

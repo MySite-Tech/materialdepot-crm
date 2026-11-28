@@ -2,7 +2,7 @@
 
 import InboundDrawer from '../../drawers/inbound/index';
 
-import { InboundStatus, closureReadiness, hasConnected, statusGateErrors, istToday, withStatusStamps } from '../../models/inbound';
+import { InboundStatus, closureReadiness, hasConnected, inInboundWindow, statusGateErrors, istToday, withStatusStamps } from '../../models/inbound';
 import { InboundLead, fmtINR } from '../../models/mock-data';
 import { useDragAutoScroll } from '../../hooks/use-drag-auto-scroll';
 import { useB2BReps } from '../../hooks/use-b2b-reps';
@@ -15,8 +15,14 @@ import { LeadTable } from './ui/table';
 import { InboundFilters, Lens, View } from './types';
 import { LensPills, LensTiles } from '../../ui/lens-tiles';
 import { AssignBar } from '../../ui/assign-bar';
-import { activeFilterCount, byNewestLeadFirst, countsTomorrow, lensMatches, lensValues, matchesFilters, sidePills, sortForLens, tileFigures, tileGroups } from './utils';
-import { fetchInboundBoard, inboundBoardMatches, saveInboundLead } from '@/lib/b2b';
+import { activeFilterCount, byNewestLeadFirst, countsTomorrow, leadCtx, lensMatches, lensValues, matchesFilters, sidePills, sortForLens, tileFigures, tileGroups } from './utils';
+import { fetchInboundBoard, inboundBoardMatches, inboundPhones, saveInboundLead } from '@/lib/b2b';
+import { INBOUND_WINDOW_START } from '../../constants/inbound';
+import { leadDeals } from '@/lib/b2b/inbound-deals/utils';
+import { useInboundDeals } from '../../hooks/use-inbound-deals';
+import { fmtDay } from '../../ui/inbound-chips';
+import { LeadCtx } from './types';
+import { DealDetail } from '../../ui/deal-detail';
 import { B2B_INBOUND_OWNER_LIST } from '@/lib/api';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInboundSync } from '../../hooks/use-inbound-sync';
@@ -44,6 +50,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const [move, setMove] = useState<{ lead: InboundLead; target: InboundStatus } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [viewingDeal, setViewingDeal] = useState<string | null>(null);
 
   const today = istToday();
 
@@ -116,16 +123,35 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
     return n && n !== l.owner ? { ...l, owner: n } : l;
   }), [leads, ownerName]);
 
+  const typed = search.trim();
+  const inWindow = useMemo(() => named.filter(inInboundWindow), [named]);
+  const windowed = typed || appliedSearch ? named : inWindow;
+
   const filtered = useMemo(
-    () => named.filter((l) => inboundBoardMatches(l, { ...serverOpts, search: undefined }) && matchesFilters(l, f)).sort(byNewestLeadFirst),
-    [named, f, serverOpts],
+    () => windowed.filter((l) => inboundBoardMatches(l, { ...serverOpts, search: typed }) && matchesFilters(l, f)).sort(byNewestLeadFirst),
+    [windowed, f, serverOpts, typed],
   );
+
+  const phoneKey = useMemo(
+    () => [...new Set(inWindow.flatMap(inboundPhones))].sort().join(','),
+    [inWindow],
+  );
+  const deals = useInboundDeals(phoneKey, !loading && !loadFailed && !unlinked);
+
+  const ctx = useMemo(() => {
+    const out = new Map<string, LeadCtx>();
+    for (const l of filtered) out.set(l.id, leadCtx(l, deals.status === 'ready' ? leadDeals(inboundPhones(l), deals.byPhone) : undefined));
+    return out;
+  }, [filtered, deals.status, deals.byPhone]);
 
   const byLens = useMemo(() => {
     const out = Object.fromEntries(LENS_KEYS.map((k) => [k, [] as InboundLead[]])) as Record<Lens, InboundLead[]>;
-    for (const l of filtered) for (const k of LENS_KEYS) if (lensMatches(k, l, today)) out[k].push(l);
+    for (const l of filtered) {
+      const c = ctx.get(l.id)!;
+      for (const k of LENS_KEYS) if (lensMatches(k, l, c, today)) out[k].push(l);
+    }
     return out;
-  }, [filtered, today]);
+  }, [filtered, ctx, today]);
 
   const counts = useMemo(
     () => Object.fromEntries(LENS_KEYS.map((k) => [k, byLens[k].length])) as Record<Lens, number>,
@@ -133,14 +159,15 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   );
 
   const tomorrow = useMemo(() => filtered.filter((l) => countsTomorrow(l, today)).length, [filtered, today]);
-  const values = useMemo(() => lensValues(byLens, tomorrow), [byLens, tomorrow]);
+  const values = useMemo(() => lensValues(byLens, ctx, tomorrow, today), [byLens, ctx, tomorrow, today]);
   const figures = tileFigures(counts, values, fmtINR);
 
-  const valueText = lens === 'pi' && values.pi ? `${fmtINR(values.pi)} open on deal tickets`
-    : lens === 'closed' && values.closed ? `${fmtINR(values.closed)} ordered`
-      : undefined;
+  const valueText = lens === 'deals' && values.deals ? `${fmtINR(values.deals)} open on carts and PIs`
+    : (lens === 'cartOpen' || lens === 'piOpen') && values[lens] ? `${fmtINR(values[lens])} open`
+      : lens === 'closed' && values.closed ? `${fmtINR(values.closed)} ordered`
+        : undefined;
 
-  const rows = useMemo(() => sortForLens(lens, byLens[lens], today), [lens, byLens, today]);
+  const rows = useMemo(() => sortForLens(lens, byLens[lens], ctx, today), [lens, byLens, ctx, today]);
 
   const canReassign = viewer.isManager || !!me;
   const reassign = useInboundReassign({
@@ -163,6 +190,12 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
   const runSearch = (q: string) => {
     setAppliedSearch(q);
     if (q) pickLens('all');
+  };
+
+  const typeSearch = (v: string) => {
+    if (v.trim() && !typed) pickLens('all');
+    if (!v.trim()) setAppliedSearch('');
+    setSearch(v);
   };
 
   const applyPatch = async (lead: InboundLead, patch: Partial<InboundLead>) => {
@@ -229,7 +262,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             {scope === 'mine'
               ? `Your leads, ${me?.name ?? ''}`
               : <span title={inboundOwners.map((o) => o.name).join(', ')}>Every inbound owner</span>}
-            {loading ? ' · loading…' : ` · ${filtered.length} lead${filtered.length === 1 ? '' : 's'}`}
+            {loading ? ' · loading…' : ` · ${filtered.length} lead${filtered.length === 1 ? '' : 's'}${typed || appliedSearch ? '' : ` since ${fmtDay(INBOUND_WINDOW_START)}`}`}
             {sync.syncing && <span className="text-gray-400"> · checking Kylas for new leads…</span>}
           </p>
         </div>
@@ -267,9 +300,9 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
             </button>
           )}
           <button
-            onClick={sync.syncNow}
+            onClick={() => { sync.syncNow(); deals.refresh(); }}
             disabled={sync.syncing}
-            title="Brings in every inbound lead from Kylas that is not in the CRM yet. It never changes a lead that is already here."
+            title="Brings in every inbound lead from Kylas that is not in the CRM yet, and re-reads open carts and PIs. It never changes a lead that is already here."
             className="bg-[#0F766E] text-white px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap disabled:opacity-50"
           >
             {sync.syncing ? '↻ Syncing…' : '↻ Sync from Kylas'}
@@ -296,7 +329,22 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         </p>
       )}
 
-      <LensTiles groups={tileGroups(counts, figures, loading ? 'pending' : loadFailed ? 'failed' : null)} active={view === 'list' ? lens : null} onPick={pickLens} />
+      {deals.status === 'failed' && !loading && !loadFailed && (
+        <p className="text-[12px] rounded px-3 py-2 mb-3 border bg-amber-50 border-amber-200 text-amber-800">
+          Open carts and PIs did not load ({deals.error}), so a lead with a cart may still sit under Calls. Leads marked PI Shared are placed correctly.
+        </p>
+      )}
+      {deals.truncated && (
+        <p className="text-[12px] rounded px-3 py-2 mb-3 border bg-amber-50 border-amber-200 text-amber-800">
+          There are more open carts than one read covers, so some carts may be missing from Carts &amp; PIs.
+        </p>
+      )}
+
+      <LensTiles
+        groups={tileGroups(counts, figures, loading ? 'pending' : loadFailed ? 'failed' : null, deals.status === 'ready' ? null : deals.status)}
+        active={view === 'list' ? lens : null}
+        onPick={pickLens}
+      />
 
       <InboundFilterBar
         f={f}
@@ -304,7 +352,7 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
         onClear={clearFilters}
         ownerOptions={scope === 'mine' ? null : inboundOwners.map((o) => o.name)}
         search={search}
-        setSearch={setSearch}
+        setSearch={typeSearch}
         onSearch={runSearch}
         aside={<LensPills pills={sidePills(counts, loading || loadFailed)} active={view === 'list' ? lens : null} onPick={pickLens} />}
       />
@@ -355,9 +403,12 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           <LeadTable
             lens={lens}
             rows={rows}
+            ctx={ctx}
+            onViewDeal={setViewingDeal}
             today={today}
             showOwner={scope === 'all'}
-            searchQuery={appliedSearch}
+            searchQuery={typed}
+            searchWide={!!appliedSearch && appliedSearch === typed}
             valueText={valueText}
             page={listPage}
             setPage={setListPage}
@@ -396,6 +447,8 @@ export default function InboundLeads({ team, viewer }: { team: B2BTeamLoad; view
           onDone={(patch) => { applyPatch(move.lead, patch); setMove(null); }}
         />
       )}
+
+      {viewingDeal && <DealDetail enqId={viewingDeal} onClose={() => setViewingDeal(null)} />}
 
       {selected && (
         <InboundDrawer

@@ -1,6 +1,5 @@
 import { OutreachLead } from '../../models/mock-data';
 import { Rep } from '../../models/outreach/intake';
-import { KpiRow, OutreachKpiKey } from '../../models/outreach/kpis';
 import { Reminder } from '../../models/outreach/reminders';
 
 export interface OutreachScope {
@@ -22,12 +21,9 @@ export type WorkLens =
   | 'all' | 'yet' | 'fu' | 'quote' | 'pi' | 'won' | 'lost'
   | 'signoff' | 'signed';
 
-export type Lens = WorkLens | `kpi:${OutreachKpiKey}`;
-
 export interface LensRow {
   lead: OutreachLead;
   reminders: Reminder[];
-  kpi?: KpiRow;
 }
 
 export interface LensGroup {

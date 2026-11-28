@@ -9,7 +9,7 @@ import { ClientOrderRow } from '@/lib/b2b';
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
+      <div className="text-[11.5px] font-medium text-gray-500">{label}</div>
       <div className="text-[12px] text-gray-800 break-words">{value || <span className="text-gray-300">—</span>}</div>
     </div>
   );
@@ -45,7 +45,7 @@ export function EnquiryDetail({ r, actions, creditRule }: { r: ClientOrderRow; a
       </div>
 
       <div>
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Items</div>
+        <div className="text-[11.5px] font-medium text-gray-500 mb-1">Items</div>
         {state === 'loading' ? (
           <p className="text-[11px] text-gray-400">Loading items…</p>
         ) : items?.length ? (
@@ -85,7 +85,7 @@ export function EnquiryDetail({ r, actions, creditRule }: { r: ClientOrderRow; a
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Visits ({visits.length})</div>
+          <div className="text-[11.5px] font-medium text-gray-500 mb-1">Visits ({visits.length})</div>
           {visits.length ? (
             <ul className="text-[11px] text-gray-600 flex flex-col gap-0.5">
               {visits.map((v, k) => <li key={k}>{fmtDate(v.date)} · {v.channel || 'visit'}</li>)}
@@ -93,7 +93,7 @@ export function EnquiryDetail({ r, actions, creditRule }: { r: ClientOrderRow; a
           ) : <p className="text-[11px] text-gray-400">None on the ticket.</p>}
         </div>
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">Remarks ({remarks.length})</div>
+          <div className="text-[11.5px] font-medium text-gray-500 mb-1">Remarks ({remarks.length})</div>
           {remarks.length ? (
             <ul className="text-[11px] text-gray-600 flex flex-col gap-1.5 max-h-48 overflow-y-auto">
               {remarks.map((m, k) => (

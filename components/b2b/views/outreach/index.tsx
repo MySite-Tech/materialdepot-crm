@@ -2,28 +2,24 @@
 
 import OutreachDrawer from '../../drawers/outreach/index';
 import { OutreachLead } from '../../models/mock-data';
-import { OutreachStatus, STUDIO_WAITLIST_URL, istToday, outreachGateErrors } from '../../models/outreach';
+import { OutreachStatus, istToday, outreachGateErrors } from '../../models/outreach';
 import { repOwns } from '../../models/outreach/handover';
 import { inboundPool, isUnassigned, unassignedPool } from '../../models/outreach/intake';
-import { OUTREACH_KPIS, Period, inPeriod, monthPeriod, outreachKpis, waitlistFor, waitlistIndex } from '../../models/outreach/kpis';
+import { Period, inPeriod, monthPeriod, waitlistFor, waitlistIndex } from '../../models/outreach/kpis';
 import { Spinner } from '../../ui/inbound-chips';
 import { LENS, NO_FILTERS } from './constants';
 import { useOutreachData } from './hooks/use-outreach-data';
 import { useOutreachLenses } from './hooks/use-outreach-lenses';
-import { useOutreachOrders } from './hooks/use-outreach-orders';
-import { teamOrders } from '../../models/performance/measures/revenue';
 import { useOutreachScope } from './hooks/use-outreach-scope';
 import { Assignments } from './intake';
 import { LensStrip } from './lenses';
 import { OutreachBoard } from './lists/board';
 import { columnsFor } from './lists/columns';
-import { BmPicker, Toolbar } from './lists/filters';
+import { Toolbar } from './lists/filters';
 import { LensTable } from './lists/table';
 import { CreateLeadModal, MoveModal } from './modals';
-import { Scorecard } from './performance';
-import { PeriodPicker } from './performance/period';
-import { TeamTable } from './performance/team-table';
-import { Lens, OutreachFilters, RangeKey, WorkLens } from './types';
+import { PeriodPicker } from './period';
+import { OutreachFilters, RangeKey, WorkLens } from './types';
 import { bmOptions, fmtRange, matchesFilters, nowIso, rangeFor } from './utils';
 import type { B2BTeamLoad, Viewer } from '@/lib/b2b/team/types';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -47,16 +43,14 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
 
   const isKamView = scope.isKam && scope.mode === 'mine';
   const defaultLens: WorkLens = isKamView ? 'signoff' : 'action';
-  const [lens, setLens] = useState<Lens>(defaultLens);
-  const [kpiShow, setKpiShow] = useState<'all' | 'counted' | 'missed'>('all');
+  const [lens, setLens] = useState<WorkLens>(defaultLens);
   const [view, setView] = useState<'list' | 'board'>('list');
-  const [scoreView, setScoreView] = useState<'tiles' | 'team'>('tiles');
   const [bm, setBm] = useState('all');
   const [periodKey, setPeriodKey] = useState('month');
   const [custom, setCustom] = useState<Period>({ from: '', to: '' });
   const [f, setF] = useState<OutreachFilters>(NO_FILTERS);
   const setFilters = (patch: Partial<OutreachFilters>) => setF((cur) => ({ ...cur, ...patch }));
-  const lensBeforeSearch = useRef<Lens | null>(null);
+  const lensBeforeSearch = useRef<WorkLens | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -87,30 +81,22 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
   const bmLeads = useMemo(() => (pickedRep ? scoped.filter(repOwns(pickedRep)) : scoped), [scoped, pickedRep]);
   const filtered = useMemo(() => bmLeads.filter((l) => matchesFilters(l, f)), [bmLeads, f]);
   const pipelineLeads = useMemo(() => (allTime || f.search.trim() ? filtered : filtered.filter((l) => inPeriod(l.createdAt, period))), [filtered, allTime, f.search, period]);
-  const sales = useOutreachOrders(period, !isKamView);
-  const outreachOrders = useMemo(() => teamOrders(sales.orders, 'outreach', null), [sales.orders]);
-  const bmOrders = useMemo(
-    () => teamOrders(outreachOrders, 'outreach', pickedRep ? [pickedRep] : scope.mode === 'mine' ? [scope.me] : null),
-    [outreachOrders, pickedRep, scope.mode, scope.me],
-  );
-  const kpis = useMemo(() => outreachKpis(bmLeads, period, waitIdx, bmOrders), [bmLeads, period, waitIdx, bmOrders]);
   const pool = useMemo(() => (data.inbound ? inboundPool(data.inbound, data.leads) : null), [data.inbound, data.leads]);
-  const lenses = useOutreachLenses({ leads: filtered, pipeline: pipelineLeads, kpis, lens, isKam: isKamView, today, nowMs, waitlist: waitIdx, pool, unassigned: unassigned.length });
+  const lenses = useOutreachLenses({ leads: filtered, pipeline: pipelineLeads, isKam: isKamView, today, nowMs, waitlist: waitIdx, pool, unassigned: unassigned.length });
 
-  const validLens = lens.startsWith('kpi:') ? !isKamView : lenses.groups.some((g) => g.head === lens || g.lenses.includes(lens as WorkLens));
+  const validLens = lenses.groups.some((g) => g.head === lens || g.lenses.includes(lens));
   useEffect(() => { if (!validLens) setLens(defaultLens); }, [validLens, defaultLens]);
 
-  const pickLens = (k: Lens) => {
+  const pickLens = (k: WorkLens) => {
     setLens(k);
     setView('list');
-    setKpiShow('all');
     lensBeforeSearch.current = null;
     const top = tableRef.current?.getBoundingClientRect().top;
     if (top !== undefined && top > window.innerHeight - 160) window.scrollBy({ top: top - 140, behavior: 'smooth' });
   };
 
   const onSearch = (q: string) => {
-    if (q && !f.search && !lens.startsWith('kpi:')) {
+    if (q && !f.search) {
       lensBeforeSearch.current = lens;
       setLens(isKamView ? 'signed' : 'all');
     }
@@ -144,19 +130,12 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
     applyPatch(lead, { status: target });
   };
 
-  const kpiDef = lenses.kpi ? OUTREACH_KPIS.find((d) => d.key === lenses.kpi!.key)! : null;
-  const rows = lenses.kpi
-    ? lenses.kpi.visible.filter((r) => kpiShow === 'all' || (kpiShow === 'counted') === r.kpi!.counts)
-    : lenses.lists[lens as WorkLens] ?? [];
-
-  const copyWaitlistLink = () => { navigator.clipboard?.writeText(STUDIO_WAITLIST_URL).catch(() => {}); };
+  const rows = lenses.lists[lens] ?? [];
 
   const selected = data.leads.find((l) => l.id === selectedId) || null;
   const loading = data.loading || team.loading;
   const state = loading ? 'loading' : data.loadFailed ? 'failed' : 'ready';
-  const heads = pickedRep || scope.mode === 'mine' ? 1 : Math.max(1, teamLive ? scope.reps.length : bms.length);
   const customIncomplete = periodKey === 'custom' && !rangeFor('custom', today, custom);
-  const customPeriod = !customIncomplete && !periodKey.startsWith('m:') && !['month', 'last-month'].includes(periodKey);
   const periodName = allTime || f.search.trim() ? 'any time' : fmtRange(period);
   const groups = useMemo(
     () => lenses.groups.map((g) => (g.flow ? { ...g, title: `Pipeline · added ${periodName}` } : g.head === 'action' ? { ...g, title: 'Action needed today' } : g)),
@@ -166,20 +145,12 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
     if (key === 'custom' && !rangeFor('custom', today, custom)) setCustom({ from: period.from, to: period.to > today ? today : period.to });
     setPeriodKey(key);
   };
-  const hidden = lenses.kpi ? lenses.kpi.total - lenses.kpi.visible.length : 0;
   const notices: ReactNode[] = [
     scope.notice,
     data.waitlistError && !isKamView
       ? <>Studio Space waitlist is unreachable, so waitlist figures read Unknown. <button onClick={data.loadWaitlist} className="underline font-semibold">Retry</button></>
       : null,
   ].filter(Boolean);
-
-  const kpiCount = () => {
-    const k = lenses.kpi!;
-    const missed = k.total - k.counted;
-    if (kpiDef!.unit === '%') return `${k.counted} of ${k.total}`;
-    return `${k.counted} counted${missed ? ` · ${missed} not counted` : ''}`;
-  };
 
   return (
     <div className="p-4 sm:p-6">
@@ -215,55 +186,16 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
         </div>
       )}
 
-      {!isKamView && (
-        <div className="mb-4 bg-white rounded-lg border border-gray-200 px-3 py-2.5 flex items-center gap-x-4 gap-y-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">BM</span>
-            {canPickBm ? <BmPicker options={bms} value={bm} onChange={setBm} />
-              : <span className="text-[12px] font-semibold text-gray-700">Your leads · {scope.me.name}</span>}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Period</span>
-            <PeriodPicker value={periodKey} onChange={pickPeriod} custom={custom} setCustom={setCustom} today={today} />
-          </div>
-          <span className={`text-[11px] ${customIncomplete ? 'text-amber-700' : 'text-gray-400'}`}>
-            {customIncomplete ? `Pick a start and an end date — showing ${fmtRange(period)} until then`
-              : 'The scorecard counts this period; the pipeline shows leads added in it. Action needed is always as of today.'}
-          </span>
-        </div>
-      )}
-
-      {!isKamView && (
-        <div className="mb-4">
-          <div className="flex items-center gap-2 flex-wrap mb-2">
-            <h2 className="text-[13px] font-bold text-gray-900">Scorecard</h2>
-            <span className="text-[11px] text-gray-400">
-              {customPeriod ? `${allTime ? `All time, ${fmtRange(period)}` : fmtRange(period)} · no monthly targets` : heads > 1 ? `Targets for ${heads} BMs` : 'Per-head targets'}
-            </span>
-            {!customPeriod && periodKey === 'month' && (
-              <span className="text-[11px] text-gray-400 flex items-center gap-1" title="The marker on each bar is where the number should be by today, at an even pace through the month.">
-                <span className="inline-block w-[2px] h-[10px] rounded bg-gray-500" /> pace for today
-              </span>
-            )}
-            {canPickBm && !pickedRep && (
-              <div className="ml-auto">
-                <Segmented value={scoreView} onChange={setScoreView} options={[['tiles', 'Tiles'], ['team', 'By BM']]} />
-              </div>
-            )}
-          </div>
-          {scoreView === 'team' && canPickBm && !pickedRep ? (
-            <TeamTable leads={scoped} orders={outreachOrders} bms={bms} period={period} today={today} teamLive={teamLive} waitlist={waitIdx}
-              onPick={(name) => { setBm(name); setScoreView('tiles'); }} />
-          ) : (
-            <Scorecard kpis={kpis} heads={heads} period={period} today={today} state={state} ordersState={sales.state} active={lens} onPick={pickLens} />
-          )}
-        </div>
-      )}
-
       <Toolbar
         f={f}
         set={setFilters}
         onSearch={onSearch}
+        bm={canPickBm && !isKamView ? { options: bms, value: bm, onChange: setBm } : null}
+        period={!isKamView && (
+          <PeriodPicker value={periodKey} onChange={pickPeriod} custom={custom} setCustom={setCustom} today={today} />
+        )}
+        periodNote={!isKamView ? (customIncomplete ? `Pick a start and an end date. Showing ${fmtRange(period)} until then.` : 'Period sets the pipeline (leads added in it). Action needed is always as of today.') : undefined}
+        periodWarn={customIncomplete}
         right={!isKamView && <Segmented value={view} onChange={setView} options={[['list', 'List'], ['board', 'Board']]} />}
       />
 
@@ -283,40 +215,11 @@ export default function OutreachLeads({ team, viewer }: { team: B2BTeamLoad; vie
         ) : lens === 'inbox' ? (
           <Assignments leads={filtered} allLeads={data.leads} pool={pool} unassigned={unassigned} scope={scope} today={today}
             save={data.save} saveMany={data.saveMany} createMany={data.createMany} onOpen={setSelectedId} />
-        ) : kpiDef && lenses.kpi ? (
-          <LensTable
-            title={kpiDef.label}
-            accent="#1A1A1A"
-            rule={`${kpiDef.rule} ${fmtRange(period)}.`}
-            count={kpiCount()}
-            cols={columnsFor(lens, { today, nowMs, showBm: canPickBm && !pickedRep, waitlist: waitIdx })}
-            rows={rows}
-            resetKey={`${lens}|${kpiShow}|${rows.length}|${period.from}`}
-            empty={hidden ? 'Filters or search hide every lead here.' : kpiDef.key === 'waitlist' && kpis.waitlist.value === null ? 'Studio Space did not answer, so sign-ups are unknown.' : 'Nothing counts toward this yet in this period.'}
-            onOpen={setSelectedId}
-            note={hidden > 0 && (
-              <span className="text-amber-700">
-                Filters or search hide {hidden} of {lenses.kpi.total}.{' '}
-                <button onClick={() => setF(NO_FILTERS)} className="underline font-semibold">Show all</button>
-              </span>
-            )}
-            aside={(
-              <div className="flex items-center gap-2 flex-wrap">
-                {kpiDef.key === 'waitlist' && (
-                  <button onClick={copyWaitlistLink} title={STUDIO_WAITLIST_URL} className="text-[11.5px] font-semibold text-[#0F766E] hover:underline whitespace-nowrap">Copy join link</button>
-                )}
-                {lenses.kpi.total > lenses.kpi.counted && (
-                  <Segmented value={kpiShow} onChange={setKpiShow}
-                    options={[['all', 'All'], ['counted', `Counted ${lenses.kpi.counted}`], ['missed', `Not counted ${lenses.kpi.total - lenses.kpi.counted}`]]} />
-                )}
-              </div>
-            )}
-          />
         ) : (
           <LensTable
-            title={LENS[lens as WorkLens].title}
-            accent={LENS[lens as WorkLens].accent}
-            rule={LENS[lens as WorkLens].rule}
+            title={LENS[lens].title}
+            accent={LENS[lens].accent}
+            rule={LENS[lens].rule}
             count={`${rows.length} lead${rows.length === 1 ? '' : 's'}`}
             cols={columnsFor(lens, { today, nowMs, showBm: canPickBm && !pickedRep, waitlist: waitIdx })}
             rows={rows}

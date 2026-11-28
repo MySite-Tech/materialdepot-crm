@@ -36,8 +36,6 @@ export const OUTREACH_KPIS: OutreachKpiDef[] = [
   { key: 'revenue',          kind: 'Output', label: 'Revenue',               short: 'Revenue',       target: 5,   unit: 'L',     rule: 'Every order placed in the period and credited to them in the per-order report (the same rule as the Overview and My performance), in all four channels, including a manager\'s credit.', weight: 15 },
 ];
 
-export const ORDER_KPIS = new Set<OutreachKpiKey>(['conversions', 'handover', 'revenue']);
-
 export interface Period { from: string; to: string }
 
 export interface KpiRow {

@@ -14,7 +14,7 @@ export function InboundDrawerFooter({ gaps, gateErrors, handleSave, onClose, sav
   discard: { keep: () => void; discard: () => void } | null;
 }) {
   return (
-    <div className="mt-auto sticky bottom-0 bg-white border-t border-gray-200 px-6 py-3.5 flex flex-col gap-2">
+    <div className="mt-auto sticky bottom-0 bg-white border-t border-gray-200 px-4 py-3 flex flex-col gap-2">
       {showGates && gateErrors.length > 0 && <GateErrors errors={gateErrors} />}
       {save.error && <GateErrors errors={[save.error]} />}
       {discard && (
@@ -37,7 +37,7 @@ export function InboundDrawerFooter({ gaps, gateErrors, handleSave, onClose, sav
         </button>
         <div className="flex items-center gap-2">
           {gaps.length > 0 && (
-            <span className="text-[10px] text-amber-700 hidden sm:inline">{gaps.length} field{gaps.length === 1 ? '' : 's'} still empty</span>
+            <span className="text-[11px] text-amber-700 hidden sm:inline">{gaps.length} field{gaps.length === 1 ? '' : 's'} still empty</span>
           )}
           <button
             onClick={() => handleSave()}

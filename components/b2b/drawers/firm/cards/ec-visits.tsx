@@ -29,9 +29,10 @@ export function EcVisitsCard({ client, ec }: { client: ClientEntity; ec: ReturnT
   return (
     <SectionCard
       title="EC visits"
-      subtitle={loading ? 'Loading…' : error ? 'Unknown' : `${upcoming} upcoming · the store sees these in the Appointment Tracker`}
+      info="Visits booked here and redirects sent to an EC from any team's drawer, matched on this firm or any of its numbers. The store sees them in the Appointment Tracker."
+      subtitle={loading ? 'Loading…' : error ? 'Unknown' : `${upcoming} upcoming`}
       right={!scheduling && !error && (
-        <button onClick={() => setScheduling(true)} className="text-[11px] font-semibold text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap">+ Schedule EC visit</button>
+        <button onClick={() => setScheduling(true)} className="text-[12px] font-medium text-[#0F766E] hover:underline cursor-pointer whitespace-nowrap">+ Schedule EC visit</button>
       )}
     >
       {error && <p className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">Could not load EC visits: {error}</p>}
@@ -152,7 +153,7 @@ function VisitRow({ visit, onSave }: { visit: EcVisit; onSave: (v: EcVisit) => P
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className={`text-[10px] font-semibold border rounded-full px-2 py-0.5 ${STATUS_COLOR[visit.status]}`}>{visit.status}</span>
-          {!editing && <button onClick={() => setEditing(true)} className="text-[11px] text-gray-400 hover:text-gray-700 underline cursor-pointer">update</button>}
+          {!editing && <button onClick={() => setEditing(true)} className="text-[12px] font-medium text-[#0F766E] hover:underline cursor-pointer">Update</button>}
         </div>
       </div>
       {editing && (

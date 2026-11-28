@@ -1,4 +1,4 @@
-import { awaitsFollowUp } from '../inbound';
+import { awaitsFollowUp, inInboundWindow } from '../inbound';
 import { OUTREACH_OPEN_STATUSES } from '../outreach';
 import { repOwns, sameRep } from '../outreach/handover';
 import { nextFollowUp, primaryContact } from '../client';
@@ -28,7 +28,7 @@ export function buildReminders(src: ReminderSources): Reminder[] {
   const out: Reminder[] = [];
 
   for (const l of src.inbound) {
-    const when = awaitsFollowUp(l) ? at(l.followUpDate, l.followUpTime) : null;
+    const when = awaitsFollowUp(l) && inInboundWindow(l) ? at(l.followUpDate, l.followUpTime) : null;
     if (!when) continue;
     const call = [...(l.callAttempts || [])].reverse().find((c) => c.note);
     out.push({

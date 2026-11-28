@@ -4,22 +4,20 @@ import { OutreachLead } from '../../../models/mock-data';
 import { WaitlistSignup } from '../../../models/outreach';
 import { orderVerified } from '../../../models/outreach/handover';
 import { PoolLead } from '../../../models/outreach/intake';
-import { OutreachKpiKey, OutreachKpis, waitlistFor } from '../../../models/outreach/kpis';
+import { waitlistFor } from '../../../models/outreach/kpis';
 import { outreachReminders } from '../../../models/outreach/reminders';
 import { KAM_GROUPS, REP_GROUPS } from '../constants';
 import { TileHint } from '../lenses';
 import { kamReminders, lensMatches, sortLens } from '../lenses/utils';
-import { Lens, LensRow, WorkLens } from '../types';
+import { LensRow, WorkLens } from '../types';
 import { useMemo } from 'react';
 
 const day = (d: string | undefined) => String(d || '').slice(0, 10);
 const lakh = (n: number) => `₹${Math.round((n / 1_00_000) * 10) / 10}L`;
 
-export function useOutreachLenses({ leads, pipeline, kpis, lens, isKam, today, nowMs, waitlist, pool, unassigned }: {
+export function useOutreachLenses({ leads, pipeline, isKam, today, nowMs, waitlist, pool, unassigned }: {
   leads: OutreachLead[];
   pipeline: OutreachLead[];
-  kpis: OutreachKpis;
-  lens: Lens;
   isKam: boolean;
   today: string;
   nowMs: number;
@@ -73,17 +71,5 @@ export function useOutreachLenses({ leads, pipeline, kpis, lens, isKam, today, n
     return h;
   }, [lists, today, pool, unassigned]);
 
-  const kpiKey = lens.startsWith('kpi:') ? (lens.slice(4) as OutreachKpiKey) : null;
-  const kpi = useMemo(() => {
-    if (!kpiKey) return null;
-    const all = kpis[kpiKey].rows;
-    const byId = new Map(rows.map((r) => [r.lead.id, r]));
-    const visible: LensRow[] = all
-      .filter((k) => byId.has(k.lead.id))
-      .map((k) => ({ ...byId.get(k.lead.id)!, kpi: k }))
-      .sort((a, b) => Number(b.kpi!.counts) - Number(a.kpi!.counts) || String(b.kpi!.at || '').localeCompare(String(a.kpi!.at || '')));
-    return { key: kpiKey, total: all.length, counted: all.filter((k) => k.counts).length, visible };
-  }, [kpiKey, kpis, rows]);
-
-  return { groups, lists, counts, hints, kpi };
+  return { groups, lists, counts, hints };
 }

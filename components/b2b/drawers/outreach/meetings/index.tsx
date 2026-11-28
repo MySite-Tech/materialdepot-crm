@@ -1,74 +1,131 @@
 'use client';
 
-import { useState } from 'react';
-import { MEETING_STATUS_COLORS } from '../../../models/outreach';
-import { meetingGaps } from '../../../models/outreach/reminders';
+import { Dispatch, SetStateAction, useState } from 'react';
 import { OutreachLead, OutreachMeeting } from '../../../models/mock-data';
-import { MeetingEditor } from './editor';
-import { MeetingEntry } from './entry';
-import { gapLabel, meetingsNewestFirst, startsExpanded } from './utils';
+import { completedMeetings, meetingsStalled, nextMeetingNumber } from '../../../models/outreach';
+import { nextMeetingBlocker } from '../../../models/outreach/reminders';
+import { Empty, Field, SectionCard, errorInputCls } from '../../../ui/inbound-chips';
+import { inputCls } from '../../../constants/ui';
+import { nowIso } from '../utils';
+import { MeetingTimeline } from './timeline';
 
-export function MeetingTimeline({ meetings, locked, stored, onCheckIn, draft, set, patchMeeting, showGates, lastHeld, openLead, scheduledNext, followUpError, contactList }: {
-  meetings: OutreachMeeting[];
-  locked: Set<number>;
-  stored: Map<number, OutreachMeeting>;
-  onCheckIn: (n: number) => void;
+export function OutreachMeetings({ draft, set, setDraft, patchMeeting, showGates, locked, stored, loggedBy, onCheckIn }: {
   draft: OutreachLead;
   set: <K extends keyof OutreachLead>(k: K, v: OutreachLead[K]) => void;
+  setDraft: Dispatch<SetStateAction<OutreachLead>>;
   patchMeeting: (n: number, patch: Partial<OutreachMeeting>) => void;
   showGates: boolean;
-  lastHeld: number | undefined;
-  openLead: boolean;
-  scheduledNext: boolean;
-  followUpError: boolean;
-  contactList: string;
+  locked: Set<number>;
+  stored: Map<number, OutreachMeeting>;
+  loggedBy: string;
+  onCheckIn: (n: number) => void;
 }) {
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set(meetings.filter(startsExpanded).map((m) => m.n)));
-  const toggle = (n: number, on: boolean) => setExpanded((prev) => {
-    const next = new Set(prev);
-    if (on) next.add(n); else next.delete(n);
-    return next;
-  });
+  const meetings = draft.meetings || [];
+  const [scheduling, setScheduling] = useState(false);
+  const [mDate, setMDate] = useState('');
+  const [mTime, setMTime] = useState('');
+  const [mArea, setMArea] = useState('');
+  const [mOffice, setMOffice] = useState('');
+  const [mError, setMError] = useState<string | null>(null);
 
-  const patch = (n: number, p: Partial<OutreachMeeting>) => { toggle(n, true); patchMeeting(n, p); };
+  const scheduleMeeting = () => {
+    if (!mDate) { setMError('A meeting date is required.'); return; }
+    setMError(null);
+    const m: OutreachMeeting = {
+      n: nextMeetingNumber(meetings),
+      date: mDate,
+      time: mTime || undefined,
+      area: mArea.trim() || undefined,
+      officeLocation: mOffice.trim() || undefined,
+      status: 'Scheduled',
+      loggedBy,
+      updatedAt: nowIso(),
+    };
+    setDraft((d) => ({ ...d, meetings: [...(d.meetings || []), m] }));
+    setScheduling(false);
+    setMDate(''); setMTime(''); setMArea(''); setMOffice('');
+  };
 
-  const ordered = meetingsNewestFirst(meetings);
-  const chronological = [...ordered].reverse();
+  const held = completedMeetings(meetings);
+  const lastHeld = held.length ? held[held.length - 1].n : undefined;
+  const openLead = draft.status !== 'Closed' && draft.status !== 'Lost';
+  const scheduledNext = meetings.some((m) => m.status === 'Scheduled');
+  const followUpError = showGates && !scheduledNext && !draft.followUpDate;
+  const people = [
+    draft.contactPerson ? `${draft.contactPerson}${draft.designation ? ` (${draft.designation})` : ''}` : '',
+    ...(draft.contacts || []).filter((c) => c.name.trim()).map((c) => `${c.name.trim()}${c.role ? ` (${c.role})` : ''}`),
+  ].filter(Boolean);
+  const contactList = `outreach-met-${draft.id}`;
+  const blocker = nextMeetingBlocker(meetings);
+
   return (
-    <ol className="relative">
-      {ordered.map((m, i) => {
-        const isLastHeld = m.n === lastHeld && openLead;
-        const forced = m.status === 'Scheduled' || (showGates && meetingGaps(m).length > 0) || (isLastHeld && followUpError);
-        const open = forced || expanded.has(m.n);
-        const prev = chronological[chronological.indexOf(m) - 1];
-        return (
-          <li key={m.n} className="relative pl-6 pb-3 last:pb-0">
-            {i < ordered.length - 1 && <span className="absolute left-[5px] top-3 bottom-0 w-px bg-gray-200" aria-hidden />}
-            <span className="absolute left-0 top-1.5 w-[11px] h-[11px] rounded-full border-2 border-white" style={{ background: MEETING_STATUS_COLORS[m.status] }} aria-hidden />
-            <div className={open ? 'rounded-md border border-gray-200 p-3 bg-white' : 'pt-0.5'}>
-              {open ? (
-                <MeetingEditor
-                  m={m}
-                  saved={stored.get(m.n)}
-                  locked={locked.has(m.n)}
-                  onCheckIn={stored.has(m.n) ? () => onCheckIn(m.n) : null}
-                  draft={draft}
-                  set={set}
-                  patchMeeting={patch}
-                  showGates={showGates}
-                  isLastHeld={isLastHeld}
-                  scheduledNext={scheduledNext}
-                  followUpError={followUpError}
-                  contactList={contactList}
-                  onDone={forced ? undefined : () => toggle(m.n, false)}
-                />
-              ) : (
-                <MeetingEntry m={m} gap={gapLabel(m, prev)} followUp={isLastHeld ? draft.followUpDate : undefined} followUpTime={isLastHeld ? draft.followUpTime : undefined} onEdit={() => toggle(m.n, true)} />
-              )}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+    <SectionCard
+      title="Meetings"
+      info="Newest first. Past meetings read as notes; Edit opens one. A meeting is checked in on arrival and then marked held with who you met and its notes."
+      right={blocker
+        ? <span className="text-[11px] text-gray-500 max-w-[280px] text-right leading-snug">{blocker}</span>
+        : (
+          <button
+            onClick={() => setScheduling((v) => !v)}
+            className="px-3 py-1 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white whitespace-nowrap"
+          >
+            {`Schedule meeting ${nextMeetingNumber(meetings)}`}
+          </button>
+        )}
+    >
+      {meetingsStalled(meetings) && (
+        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 leading-snug">
+          {meetings.length} meetings were postponed and none was held. Book another, mark the lead
+          {' '}<strong>Lost</strong> with reason &ldquo;Unable to meet (4 meetings)&rdquo;, or park it on
+          {' '}<strong>Follow up</strong> with a long-term date. Nothing is decided for you.
+        </div>
+      )}
+
+      {scheduling && (
+        <div className="mb-3 rounded-md border border-gray-200 bg-gray-50/70 p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <Field label="Meeting date" required>
+              <input type="date" value={mDate} onChange={(e) => setMDate(e.target.value)} className={mError && !mDate ? errorInputCls : inputCls} />
+            </Field>
+            <Field label="Time">
+              <input type="time" value={mTime} onChange={(e) => setMTime(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="Area">
+              <input value={mArea} onChange={(e) => setMArea(e.target.value)} placeholder="e.g. Indiranagar" className={inputCls} />
+            </Field>
+            <Field label="Office location">
+              <input value={mOffice} onChange={(e) => setMOffice(e.target.value)} className={inputCls} />
+            </Field>
+          </div>
+          {mError && <p className="text-[11px] text-red-600 mt-2">{mError}</p>}
+          <div className="flex items-center justify-end gap-2 mt-3">
+            <button onClick={() => { setScheduling(false); setMError(null); }} className="px-3 py-1.5 text-[12px] font-semibold border border-gray-200 rounded-md text-gray-500 bg-white">Cancel</button>
+            <button onClick={scheduleMeeting} className="px-3 py-1.5 text-[12px] font-semibold rounded-md bg-[#0F766E] text-white">Add meeting</button>
+          </div>
+        </div>
+      )}
+
+      <datalist id={contactList}>{people.map((p) => <option key={p} value={p} />)}</datalist>
+      {meetings.length === 0 && !scheduling ? (
+        <Empty>No meetings scheduled yet. The lead sits in &ldquo;Yet to Meet&rdquo; until one is held.</Empty>
+      ) : (
+        <MeetingTimeline
+          key={draft.id}
+          meetings={meetings}
+          locked={locked}
+          stored={stored}
+          onCheckIn={onCheckIn}
+          draft={draft}
+          set={set}
+          patchMeeting={patchMeeting}
+          showGates={showGates}
+          lastHeld={lastHeld}
+          openLead={openLead}
+          scheduledNext={scheduledNext}
+          followUpError={followUpError}
+          contactList={contactList}
+        />
+      )}
+    </SectionCard>
   );
 }

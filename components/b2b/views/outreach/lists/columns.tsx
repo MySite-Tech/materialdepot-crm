@@ -8,7 +8,7 @@ import { Pill, fmtDay } from '../../../ui/inbound-chips';
 import { MeetingDots, OutreachStatusBadge, WaitlistChip } from '../../../ui/outreach-chips';
 import { WaitlistIndex, waitlistFor } from '../../../models/outreach/kpis';
 import { LENS_STATUS } from '../constants';
-import { Lens, LensRow } from '../types';
+import { LensRow, WorkLens } from '../types';
 import { gapsFor } from '../utils';
 import { fmtTime } from '../../../models/reminders';
 import { ReactNode } from 'react';
@@ -97,7 +97,7 @@ const value = (l: OutreachLead) => (l.orderValue
   ? <span className="font-mono text-gray-700 whitespace-nowrap">{fmtINR(l.orderValue)}</span>
   : l.expectedOrderValue ? <span className="font-mono text-gray-400 whitespace-nowrap" title="The BM's estimate">~{fmtINR(l.expectedOrderValue)}</span> : dash);
 
-export function columnsFor(lens: Lens, { today, nowMs, showBm, waitlist }: { today: string; nowMs: number; showBm: boolean; waitlist: WaitlistIndex }): Col[] {
+export function columnsFor(lens: WorkLens, { today, nowMs, showBm, waitlist }: { today: string; nowMs: number; showBm: boolean; waitlist: WaitlistIndex }): Col[] {
   const firm: Col = { head: 'Firm', cell: (r) => <Firm l={r.lead} /> };
   const stage: Col = { head: 'Stage', cell: (r) => <OutreachStatusBadge s={r.lead.status} /> };
   const meetings: Col = { head: 'Meetings', cell: (r) => <MeetingDots meetings={r.lead.meetings} /> };
@@ -110,22 +110,6 @@ export function columnsFor(lens: Lens, { today, nowMs, showBm, waitlist }: { tod
   const onWaitlist: Col = { head: 'Waitlist', cell: (r) => <WaitlistChip w={waitlistFor(r.lead, waitlist)} short /> };
   const converted: Col = { head: 'Converted', cell: (r) => muted(fmtDay(r.lead.convertedAt || r.lead.statusChangedAt)) };
 
-  if (lens.startsWith('kpi:')) {
-    return [
-      firm,
-      {
-        head: 'Counts?',
-        cell: (r) => (
-          <div className="flex items-start gap-1.5 max-w-[340px]">
-            <span className={`shrink-0 font-bold ${r.kpi?.counts ? 'text-[#0F766E]' : 'text-amber-600'}`}>{r.kpi?.counts ? '✓' : '✕'}</span>
-            <span className={`leading-snug ${r.kpi?.counts ? 'text-gray-600' : 'text-amber-700'}`}>{r.kpi?.note}</span>
-          </div>
-        ),
-      },
-      { head: 'Date', cell: (r) => muted(r.kpi?.at ? fmtDay(r.kpi.at) : '') },
-      stage, meetings, ...bm,
-    ];
-  }
   switch (lens) {
     case 'action':
       return [firm, { head: "What's due", cell: (r) => <Due rs={r.reminders} /> }, stage, next, ...bm];

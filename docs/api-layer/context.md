@@ -269,6 +269,17 @@ pages up to `FUNNEL_PAGES` (30) of `/crm/leads/`, 8 in flight at a time
 (`PARALLEL_PAGES`). Before this, every page was requested at once, and 30 at once
 would hit Django together.
 
+`lib/server/b2b-inbound/deals.ts` (`POST /api/b2b/inbound/deals`, 2026-11-28) is the
+same shape for Inbound's Carts & PIs group. Django has no per-phone filter on
+`/crm/leads/` (`phones=` and `client_phones=` are ignored and return every row), so
+the route pages the open tickets once, `status=In Cart,Quote Approval Pending,Availability Check,Hold Stock`
+from 30 days before the Inbound window (at most 120 days back), 1,000 a page, 8 in
+flight. It caches 5 minutes per caller and returns only the numbers the page posts.
+`status=` takes a comma list. A repeated `status=` keeps only the last value, and an
+unknown status such as `Payment Pending` is ignored, so the filter falls away and the
+read returns every row. Measured on 28 Nov with a signed-in token: 7,785 open tickets
+since 11 Oct, 8 pages, about 0.7 s and 710 KB a page.
+
 ### There is no scheduled route in this app, and no platform cron to run one
 
 Worth knowing before someone adds one: this app deploys to **Azure Static Web

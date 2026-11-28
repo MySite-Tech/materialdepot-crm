@@ -1,7 +1,7 @@
 'use client';
 
 import { LENS } from '../constants';
-import { Lens, LensGroup, WorkLens } from '../types';
+import { LensGroup, WorkLens } from '../types';
 
 export interface TileHint {
   text: string;
@@ -19,7 +19,7 @@ export function LensStrip({ groups, counts, hints, state, active, onPick }: {
   counts: Partial<Record<WorkLens, number>>;
   hints: Partial<Record<WorkLens, TileHint>>;
   state: 'ready' | 'loading' | 'failed';
-  active: Lens | null;
+  active: WorkLens | null;
   onPick: (lens: WorkLens) => void;
 }) {
   const shown = (k: WorkLens) => (state === 'loading' ? '…' : state === 'failed' ? '?' : String(counts[k] ?? 0));

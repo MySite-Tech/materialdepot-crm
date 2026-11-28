@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Hint } from '../../../ui/info-tip';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`bg-white rounded-xl border border-gray-200 p-5 ${className}`}>{children}</div>;
@@ -15,18 +16,6 @@ export function SectionHead({ title, hint, right }: { title: string; hint?: stri
       </div>
       {right}
     </div>
-  );
-}
-
-export function Hint({ text }: { text: string }) {
-  return (
-    <span
-      title={text}
-      aria-label={text}
-      className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-300 text-[9px] font-bold text-gray-400 cursor-help select-none"
-    >
-      i
-    </span>
   );
 }
 

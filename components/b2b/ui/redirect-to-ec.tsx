@@ -178,16 +178,14 @@ export function RedirectToEc({ enquiries, enquiriesState, ...lead }: {
 
   return (
     <SectionCard
-      title="Send a cart or PI to an EC"
-      owner="crm"
-      subtitle="Pick the cart or PI and the BM who takes it. Every redirect of this client from any team is listed, with carts and orders at that EC since."
-      right={!open && enquiriesState !== 'loading' && <button onClick={() => setOpen(true)} className="text-[11px] font-semibold text-[#0F766E] hover:underline whitespace-nowrap">+ Send to EC</button>}
+      title="Send to an EC"
+      info={'Pick the cart or PI and the BM who takes it. Every redirect of this client from any team is listed, with carts and orders at that EC since.\nA cart counts when it is on one of the redirect\'s numbers, owned by that EC\'s staff, and opened on or after the redirect day.'}
+      right={!open && enquiriesState !== 'loading' && <button onClick={() => setOpen(true)} className="text-[12px] font-medium text-[#0F766E] hover:underline whitespace-nowrap">+ Send to EC</button>}
     >
       {loadError && <p className="text-[11.5px] text-amber-700 mb-2">Redirects did not load: {loadError}. Whether this client was sent to an EC is unknown.</p>}
       {!!redirects?.length && (
         <div className="flex flex-col gap-2 mb-2">
           {redirects.map((v) => <RedirectRow key={v.id} v={v} result={tickets[v.id]} />)}
-          <p className="text-[10.5px] text-gray-400">A cart counts when it is on one of the redirect&apos;s numbers, owned by that EC&apos;s staff, and opened on or after the redirect day.</p>
         </div>
       )}
       {open ? (
