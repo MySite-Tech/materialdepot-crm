@@ -219,8 +219,11 @@ uses the same card, so it changed too.
 **A cart has no product lines in Django (checked on production, 2026-11-28).** For an
 `In Cart` ticket `/crm/leads/?enquiry_ids=…&include=boq` answers `boqItems: []` and
 `cartItems` is only the category ("Tiles"), so a cart shows its category and no qty or
-rate. PIs answer full lines. That is Django's data, not the screen
-(`backends.md` §Owed by Django row 22).
+rate. PIs answer full lines. That is Django's data, not the screen. Studio Space shows
+every SKU because it reads Material Depot's snapshot service with its own key. **The tech
+team will add that to the CRM and make it live (the user, 2026-11-28); a session should
+not build it unless asked.** The plan and the env vars are in `backends.md` §Owed by
+Django row 22.
 
 ### Studio Space: their view (2026-11-28)
 
