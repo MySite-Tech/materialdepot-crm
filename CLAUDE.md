@@ -734,9 +734,10 @@ Five changes; read the named doc section before touching any of them:
   (a second `next dev` exits); stop :3000 first. Supabase tabs there still write
   production.
 
-**START HERE for KAM and the firm page (2026-11-28, fourth round, latest): CRM PR from
-`kam-groups-firm-details`, merged and deployed on Dhruv's ask; no backend PR, no
-migration.** Start new work from `origin/main`. The user asked
+**START HERE for KAM and the firm page (2026-11-28, fourth round, latest): CRM PR #114
+(`41bef82`), merged and deployed on Dhruv's ask; no backend PR, no migration.** Start new
+work from `origin/main`. After deploy the live bundle carried the new KAM groups, the red
+missing-details count, the per-ticket rows and the Studio view, and no Order board. The user asked
 for KAM to work like Inbound and Outreach. Read `kam.md` §Five groups, §Carts and PIs
 are the KAM pipeline and §Referred clients, and `client-db.md` §Edit details, §A cart or
 PI on the Orders tab opens in full and §Studio Space: their view before touching any of it.
