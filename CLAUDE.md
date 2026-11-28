@@ -736,8 +736,12 @@ Five changes; read the named doc section before touching any of them:
 
 **START HERE for KAM and the firm page (2026-11-28, fourth round, latest): CRM PR #114
 (`41bef82`), merged and deployed on Dhruv's ask; no backend PR, no migration.** Start new
-work from `origin/main`. After deploy the live bundle carried the new KAM groups, the red
-missing-details count, the per-ticket rows and the Studio view, and no Order board. The user asked
+work from `origin/main`. **Checked signed in on production the same day (read-only, as
+Dhruv):** all 18 KAM tiles equal their lists (Carts & PIs 97 tickets, 74 carts + 23 PIs);
+a PI opens with its product lines; a firm opens on PI shared with the KAM follow-up
+column and the red missing count; Edit details opens with the right gaps; a Studio-linked
+firm's Studio Space tab shows its own dashboard; no console errors. **A cart shows only
+its category: Django sends no line items for carts** (`backends.md` Owed by Django row 22). The user asked
 for KAM to work like Inbound and Outreach. Read `kam.md` §Five groups, §Carts and PIs
 are the KAM pipeline and §Referred clients, and `client-db.md` §Edit details, §A cart or
 PI on the Orders tab opens in full and §Studio Space: their view before touching any of it.
@@ -752,10 +756,8 @@ PI on the Orders tab opens in full and §Studio Space: their view before touchin
 - Accepted limits (the user, 28 Nov): KAM's Carts & PIs lists only tickets opened since
   `openDealsSince` (11 Oct), older ones stay on the firm's Orders tab; old KAM-order
   follow-up dates are not carried over, so every open ticket starts as "open".
-- Seen on the sandbox and on fixtures, not yet signed in on production. **First thing to
-  check live:** KAM → Carts & PIs loads per-ticket rows, Log follow-up on one moves it to
-  follow up, a firm's Studio Space tab opens their view. `views/kams` is now `drawer/`,
-  `lists/`, `hooks/`.
+- Not yet exercised on production: Log follow-up (nothing was saved in the check).
+  `views/kams` is now `drawer/`, `lists/`, `hooks/`.
 
 **START HERE for B2B (2026-11-28, third round): CRM PRs #112 and #113, merged and
 deployed on Dhruv's ask; no backend PR.** Start new work from `origin/main`.
