@@ -734,28 +734,34 @@ Five changes; read the named doc section before touching any of them:
   (a second `next dev` exits); stop :3000 first. Supabase tabs there still write
   production.
 
-**START HERE for Inbound (2026-11-28, latest): calls, then carts and PIs, and a tabbed
-lead window. CRM PR #108 from `inbound-calls-carts-drawer`, open, not merged; no backend
-PR. The tech team merges.** To continue the work, check out that branch (in a `git
-worktree`), not `main`. The user's three asks:
-the Inbound tab counts only leads since 10 Nov (`INBOUND_WINDOW_START`; a search still
-reaches older ones); its groups are Calls / Carts & PIs / Outcomes, where a lead with an
-open cart or PI on any of its numbers leaves Calls (Django's open tickets, read once
-server-side and cached 5 minutes per caller); and the lead window is a header plus five
-tabs. The "i" explanations across B2B open on hover and pin on click (`ui/info-tip.tsx`).
-Read `docs/b2b/inbound.md` §Only leads since 10 Nov, §Three groups and §The lead window
-has five tabs first. On 28 Nov real data gave 485 leads: Calls 301, Carts & PIs 40.
-**Second round, same PR (the user's review of :3000, 2026-11-28):** "Ready to close" is
-now **Needs a decision**; any cart or PI opens in full (`ui/deal-detail.tsx`: products,
-values, store, BM, dates, remarks) from Inbound's list and Deal tab and Outreach's Deal
-tab; the filters were fixed (lead date compared the Kylas date, not the shown one; search
-needed Enter) and Inbound, Outreach and KAM share one chip filter bar (`ui/filter-bar.tsx`);
-the **Outreach and Firm (KAM / Client Database) drawers are tabbed** like Inbound's; the
-**Outreach scorecard is removed** and lives only on the Leadership Board. Read
-`inbound.md` §Filters, `outreach.md` §The lead window has tabs, `client-db.md` §The firm
-page has tabs. **:3000 serves this branch** from `~/Projects/crm-inbound-108` (the main
-checkout stays on `main`). **After deploy,** check signed in that the Carts & PIs tiles
-load. They read Unknown with an amber notice if Django refuses the read for that login.
+**START HERE for Inbound, Outreach and KAM screens (2026-11-28, latest): CRM PR #108
+(`7748cce`), merged and LIVE on Dhruv's ask; no backend PR.** Start new work from
+`origin/main`. Checked live after deploy: the deploy succeeded, `/api/b2b/inbound/deals`
+answers 401 without a session, and the live bundle carries the new screens. **Not yet
+seen signed in on production.** What it carries:
+- **Inbound counts only leads since 10 Nov** (`INBOUND_WINDOW_START`, the later of the
+  Kylas day and the CRM row day). Search still reaches older ones, and Reminders follow
+  the same window.
+- **Groups are Calls / Carts & PIs / Outcomes.** A lead with an open cart or PI on any of
+  its numbers leaves Calls. Django's open tickets are read once server-side and cached
+  5 minutes per caller. "Ready to close" is now **Needs a decision**.
+- **Any cart or PI opens in full** (`ui/deal-detail.tsx`) from Inbound's list, Inbound's
+  Deal tab and Outreach's Deal tab.
+- **Filters were fixed.** Lead date compared the Kylas date, and search needed Enter.
+  Inbound, Outreach and KAM now share one chip filter bar (`ui/filter-bar.tsx`).
+- **Inbound, Outreach and Firm (KAM / Client Database) drawers are header plus tabs.**
+  The "i" explanations open on hover and pin on click (`ui/info-tip.tsx`).
+- **The Outreach scorecard is removed;** it lives only on the Leadership Board.
+
+Read `inbound.md` §Only leads since 10 Nov, §Three groups, §Filters, §The lead window has
+five tabs; `outreach.md` §The lead window has tabs; and `client-db.md` §The firm page has
+tabs. On 28 Nov real data gave 485 leads: Calls 301, Carts & PIs 40. **First thing to do
+signed in on production:**
+- Carts & PIs tiles load. They read Unknown with an amber notice if Django refuses the
+  read for that login.
+- A cart's detail lists its products.
+- A rep's Inbound shows only their leads since 10 Nov.
+
 **Open question for the user:** whether Lost, Closed or Invalid leads with an open cart
 (14 on 28 Nov) should come back into Carts & PIs; today they stay in Outcomes.
 
