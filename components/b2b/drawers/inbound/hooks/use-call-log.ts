@@ -1,6 +1,6 @@
 'use client';
 
-import { CallAttempt, InboundStatus, connectedCallErrors, istToday, nextAttemptNumber, nextWorkingDay } from '../../../models/inbound';
+import { CallAttempt, InboundStatus, connectedCallErrors, istToday, nextAttemptNumber, nextWorkingDay, withStatusStamps } from '../../../models/inbound';
 import { InboundLead, LeadNote } from '../../../models/mock-data';
 import { saveInboundLead } from '@/lib/b2b';
 import { useState } from 'react';
@@ -28,7 +28,8 @@ export function useCallLog(
   const persist = async (draftNext: InboundLead, failMsg: string): Promise<boolean> => {
     setBusy(true);
     setError(null);
-    const res = await saveInboundLead(base(), prepare(draftNext));
+    const saved = base();
+    const res = await saveInboundLead(saved, prepare(withStatusStamps(saved, draftNext, new Date().toISOString())));
     setBusy(false);
     if (!res.lead) { setError(`${failMsg}: ${res.error}`); return false; }
     commit(res.lead);
@@ -41,7 +42,6 @@ export function useCallLog(
     followUpDate,
     followUpTime,
     stage,
-    statusChangedAt: stage !== draft.stage ? attempt.at : draft.statusChangedAt,
   });
 
   const logRnr = async () => {
